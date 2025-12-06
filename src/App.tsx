@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { SettingsProvider } from "@/contexts/SettingsContext";
+import { IntegrationsProvider } from "@/contexts/IntegrationsContext";
 import Overview from "./pages/Overview";
 import Events from "./pages/Events";
 import WalletsSegments from "./pages/WalletsSegments";
@@ -18,22 +19,24 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <SettingsProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Overview />} />
-            <Route path="/events" element={<Events />} />
-            <Route path="/wallets" element={<WalletsSegments />} />
-            <Route path="/airdrops" element={<Airdrops />} />
-            <Route path="/alerts" element={<Alerts />} />
-            <Route path="/integrations" element={<Integrations />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
+      <IntegrationsProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Overview />} />
+              <Route path="/events" element={<Events />} />
+              <Route path="/wallets" element={<WalletsSegments />} />
+              <Route path="/airdrops" element={<Airdrops />} />
+              <Route path="/alerts" element={<Alerts />} />
+              <Route path="/integrations" element={<Integrations />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </IntegrationsProvider>
     </SettingsProvider>
   </QueryClientProvider>
 );
