@@ -42,10 +42,13 @@ export default function Integrations() {
 
   const [webhookUrl, setWebhookUrl] = useState(n8nWebhookUrl);
 
-  // Loading states
+  // Loading and verified states
   const [testingTelegram, setTestingTelegram] = useState(false);
   const [testingDiscord, setTestingDiscord] = useState(false);
   const [testingX, setTestingX] = useState(false);
+  const [telegramVerified, setTelegramVerified] = useState(false);
+  const [discordVerified, setDiscordVerified] = useState(false);
+  const [xVerified, setXVerified] = useState(false);
 
   const handleSaveWebhook = () => {
     setN8nWebhookUrl(webhookUrl);
@@ -66,27 +69,29 @@ export default function Integrations() {
     }
 
     setTestingTelegram(true);
+    setTelegramVerified(false);
     const success = await testTelegramConnection({
       telegramToken,
       telegramChatId,
       channelName: telegramChannelName,
     });
     setTestingTelegram(false);
+    setTelegramVerified(success);
 
     toast({
-      title: success ? "Test Sent" : "Test Failed",
+      title: success ? "Connection Verified" : "Test Failed",
       description: success
-        ? "Test message sent via n8n. Check your Telegram channel."
-        : "Failed to send test message. Check your credentials and n8n webhook.",
+        ? "Test message sent successfully! You can now save your credentials."
+        : "Failed to send test message. Check your Bot Token and Chat ID.",
       variant: success ? "default" : "destructive",
     });
   };
 
   const handleSaveTelegram = () => {
-    if (!telegramToken || !telegramChatId) {
+    if (!telegramVerified) {
       toast({
-        title: "Missing Credentials",
-        description: "Please enter both Bot Token and Chat ID.",
+        title: "Verification Required",
+        description: "Please test your connection first before saving.",
         variant: "destructive",
       });
       return;
@@ -114,26 +119,28 @@ export default function Integrations() {
     }
 
     setTestingDiscord(true);
+    setDiscordVerified(false);
     const success = await testDiscordConnection({
       discordWebhookUrl,
       channelName: discordChannelName,
     });
     setTestingDiscord(false);
+    setDiscordVerified(success);
 
     toast({
-      title: success ? "Connection Successful" : "Connection Failed",
+      title: success ? "Connection Verified" : "Connection Failed",
       description: success
-        ? "Test message sent to Discord successfully!"
+        ? "Test message sent to Discord successfully! You can now save."
         : "Failed to connect. Please check your webhook URL.",
       variant: success ? "default" : "destructive",
     });
   };
 
   const handleSaveDiscord = () => {
-    if (!discordWebhookUrl) {
+    if (!discordVerified) {
       toast({
-        title: "Missing Webhook URL",
-        description: "Please enter your Discord webhook URL.",
+        title: "Verification Required",
+        description: "Please test your connection first before saving.",
         variant: "destructive",
       });
       return;
@@ -160,6 +167,7 @@ export default function Integrations() {
     }
 
     setTestingX(true);
+    setXVerified(false);
     const success = await testXConnection({
       xApiKey,
       xApiSecret,
@@ -168,21 +176,22 @@ export default function Integrations() {
       channelName: xChannelName,
     });
     setTestingX(false);
+    setXVerified(success);
 
     toast({
       title: success ? "Test Sent" : "Test Failed",
       description: success
-        ? "Test message sent via n8n. Check your X timeline."
+        ? "Test message sent via n8n. Check your X timeline. You can now save."
         : "Failed to send test message. Check your credentials and n8n webhook.",
       variant: success ? "default" : "destructive",
     });
   };
 
   const handleSaveX = () => {
-    if (!xApiKey || !xApiSecret || !xAccessToken || !xAccessSecret) {
+    if (!xVerified) {
       toast({
-        title: "Missing Credentials",
-        description: "Please enter all X OAuth 1.0a credentials.",
+        title: "Verification Required",
+        description: "Please test your connection first before saving.",
         variant: "destructive",
       });
       return;
@@ -352,10 +361,14 @@ export default function Integrations() {
                 <Button
                   className="flex-1 bg-primary hover:bg-primary/90"
                   onClick={handleSaveTelegram}
+                  disabled={!telegramVerified}
                 >
                   Save
                 </Button>
               </div>
+              {telegramVerified && !integrationStatus.telegram && (
+                <p className="text-xs text-success">✓ Credentials verified. Click Save to store.</p>
+              )}
               {integrationStatus.telegram && (
                 <Button
                   variant="ghost"
@@ -428,10 +441,14 @@ export default function Integrations() {
                 <Button
                   className="flex-1 bg-primary hover:bg-primary/90"
                   onClick={handleSaveDiscord}
+                  disabled={!discordVerified}
                 >
                   Save
                 </Button>
               </div>
+              {discordVerified && !integrationStatus.discord && (
+                <p className="text-xs text-success">✓ Credentials verified. Click Save to store.</p>
+              )}
               {integrationStatus.discord && (
                 <Button
                   variant="ghost"
@@ -539,10 +556,14 @@ export default function Integrations() {
                 <Button
                   className="flex-1 bg-primary hover:bg-primary/90"
                   onClick={handleSaveX}
+                  disabled={!xVerified}
                 >
                   Save & Connect
                 </Button>
               </div>
+              {xVerified && !integrationStatus.x && (
+                <p className="text-xs text-success">✓ Credentials verified. Click Save to store.</p>
+              )}
               {integrationStatus.x && (
                 <Button
                   variant="ghost"

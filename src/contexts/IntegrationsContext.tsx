@@ -161,33 +161,16 @@ export function IntegrationsProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Test Telegram/X by sending via n8n webhook
+  // Test Telegram by sending a message directly via Telegram API
   const testTelegramConnection = async (creds: TelegramCredentials): Promise<boolean> => {
-    if (!n8nWebhookUrl) {
-      toast({
-        title: "Configuration Required",
-        description: "Please set your n8n webhook URL in Settings first.",
-        variant: "destructive",
-      });
-      return false;
-    }
-
     try {
-      const response = await fetch(n8nWebhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        mode: "no-cors",
-        body: JSON.stringify({
-          source: "telegram",
-          title: "Test Connection",
-          credentials: {
-            telegramToken: creds.telegramToken,
-            telegramChatId: creds.telegramChatId,
-          },
-          message: "🔔 QX Dashboard Test - Connection successful!",
-        }),
-      });
-      return true; // With no-cors we can't check response, assume success
+      const message = encodeURIComponent("🔔 QX Dashboard Test - Connection successful!");
+      const url = `https://api.telegram.org/bot${creds.telegramToken}/sendMessage?chat_id=${creds.telegramChatId}&text=${message}`;
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      return data.ok === true;
     } catch (error) {
       console.error("Telegram test failed:", error);
       return false;
