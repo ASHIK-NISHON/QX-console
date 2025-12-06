@@ -14,7 +14,96 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      qx_events: {
+        Row: {
+          amount: string
+          asset_name: string | null
+          created_at: string | null
+          dest_id: string
+          id: string
+          input_hex: string | null
+          input_type: number | null
+          issuer_address: string | null
+          money_flew: boolean | null
+          number_of_shares: number | null
+          price: number | null
+          procedure_type_name: string
+          procedure_type_value: number
+          raw_payload: Json | null
+          signature_hex: string | null
+          source_id: string
+          tick_number: number
+          timestamp: number
+          tx_id: string
+        }
+        Insert: {
+          amount: string
+          asset_name?: string | null
+          created_at?: string | null
+          dest_id: string
+          id?: string
+          input_hex?: string | null
+          input_type?: number | null
+          issuer_address?: string | null
+          money_flew?: boolean | null
+          number_of_shares?: number | null
+          price?: number | null
+          procedure_type_name: string
+          procedure_type_value: number
+          raw_payload?: Json | null
+          signature_hex?: string | null
+          source_id: string
+          tick_number: number
+          timestamp: number
+          tx_id: string
+        }
+        Update: {
+          amount?: string
+          asset_name?: string | null
+          created_at?: string | null
+          dest_id?: string
+          id?: string
+          input_hex?: string | null
+          input_type?: number | null
+          issuer_address?: string | null
+          money_flew?: boolean | null
+          number_of_shares?: number | null
+          price?: number | null
+          procedure_type_name?: string
+          procedure_type_value?: number
+          raw_payload?: Json | null
+          signature_hex?: string | null
+          source_id?: string
+          tick_number?: number
+          timestamp?: number
+          tx_id?: string
+        }
+        Relationships: []
+      }
+      wallets: {
+        Row: {
+          address: string
+          first_seen_at: string | null
+          id: string
+          last_seen_at: string | null
+          transaction_count: number | null
+        }
+        Insert: {
+          address: string
+          first_seen_at?: string | null
+          id?: string
+          last_seen_at?: string | null
+          transaction_count?: number | null
+        }
+        Update: {
+          address?: string
+          first_seen_at?: string | null
+          id?: string
+          last_seen_at?: string | null
+          transaction_count?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
