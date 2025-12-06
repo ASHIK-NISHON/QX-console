@@ -8,27 +8,16 @@ const corsHeaders = {
 interface WebhookPayload {
   ProcedureTypeValue: number;
   ProcedureTypeName: string;
-  RawTransaction: {
-    transaction: {
-      sourceId: string;
-      destId: string;
-      amount: string;
-      tickNumber: number;
-      inputType: number;
-      inputSize: number;
-      inputHex: string;
-      signatureHex: string;
-      txId: string;
-    };
-    timestamp: string;
-    moneyFlew: boolean;
-  };
-  ParsedTransaction: {
-    IssuerAddress: string;
-    AssetName: string;
-    Price: number;
-    NumberOfShares: number;
-  };
+  sourceId: string;
+  destId: string;
+  amount: number | string;
+  tickNumber: number;
+  timestamp: string;
+  moneyFlow: boolean;
+  IssuerAddress: string;
+  AssetName: string;
+  Price: number;
+  NumberOfShares: number;
 }
 
 Deno.serve(async (req) => {
@@ -43,65 +32,79 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const payload: WebhookPayload = await req.json();
+    const rawPayload = await req.json();
     
-    console.log('Received webhook payload:', JSON.stringify(payload, null, 2));
+    // Handle array or single object
+    const payloads: WebhookPayload[] = Array.isArray(rawPayload) ? rawPayload : [rawPayload];
+    
+    console.log('Received webhook payload:', JSON.stringify(payloads, null, 2));
 
-    const { RawTransaction, ParsedTransaction, ProcedureTypeValue, ProcedureTypeName } = payload;
-    const { transaction, timestamp, moneyFlew } = RawTransaction;
+    const results = [];
+    
+    for (const payload of payloads) {
+      // Generate a unique tx_id from tickNumber and sourceId
+      const txId = `${payload.tickNumber}-${payload.sourceId}-${Date.now()}`;
+      
+      // Parse timestamp - could be ISO string or unix timestamp
+      let timestampMs: number;
+      if (typeof payload.timestamp === 'string') {
+        timestampMs = new Date(payload.timestamp).getTime();
+      } else {
+        timestampMs = payload.timestamp;
+      }
 
-    // Insert event into database
-    const { data: eventData, error: eventError } = await supabase
-      .from('qx_events')
-      .upsert({
-        procedure_type_value: ProcedureTypeValue,
-        procedure_type_name: ProcedureTypeName,
-        source_id: transaction.sourceId,
-        dest_id: transaction.destId,
-        amount: transaction.amount,
-        tick_number: transaction.tickNumber,
-        tx_id: transaction.txId,
-        input_type: transaction.inputType,
-        input_hex: transaction.inputHex,
-        signature_hex: transaction.signatureHex,
-        timestamp: parseInt(timestamp),
-        money_flew: moneyFlew,
-        issuer_address: ParsedTransaction.IssuerAddress,
-        asset_name: ParsedTransaction.AssetName,
-        price: ParsedTransaction.Price,
-        number_of_shares: ParsedTransaction.NumberOfShares,
-        raw_payload: payload,
-      }, { onConflict: 'tx_id' })
-      .select()
-      .single();
+      // Insert event into database
+      const { data: eventData, error: eventError } = await supabase
+        .from('qx_events')
+        .insert({
+          procedure_type_value: payload.ProcedureTypeValue,
+          procedure_type_name: payload.ProcedureTypeName,
+          source_id: payload.sourceId,
+          dest_id: payload.destId,
+          amount: String(payload.amount),
+          tick_number: payload.tickNumber,
+          tx_id: txId,
+          timestamp: timestampMs,
+          money_flew: payload.moneyFlow,
+          issuer_address: payload.IssuerAddress,
+          asset_name: payload.AssetName,
+          price: payload.Price,
+          number_of_shares: payload.NumberOfShares,
+          raw_payload: payload,
+        })
+        .select()
+        .single();
 
-    if (eventError) {
-      console.error('Error inserting event:', eventError);
-      throw eventError;
-    }
+      if (eventError) {
+        console.error('Error inserting event:', eventError);
+        throw eventError;
+      }
 
-    console.log('Event inserted:', eventData?.id);
+      console.log('Event inserted:', eventData?.id);
 
-    // Upsert source wallet
-    const { error: sourceWalletError } = await supabase
-      .from('wallets')
-      .upsert({
-        address: transaction.sourceId,
-        last_seen_at: new Date().toISOString(),
-      }, { 
-        onConflict: 'address',
-        ignoreDuplicates: false 
-      });
+      // Upsert source wallet
+      const { error: sourceWalletError } = await supabase
+        .from('wallets')
+        .upsert({
+          address: payload.sourceId,
+          last_seen_at: new Date().toISOString(),
+        }, { 
+          onConflict: 'address',
+          ignoreDuplicates: false 
+        });
 
-    if (sourceWalletError) {
-      console.error('Error upserting source wallet:', sourceWalletError);
+      if (sourceWalletError) {
+        console.error('Error upserting source wallet:', sourceWalletError);
+      }
+
+      results.push({ event_id: eventData?.id });
     }
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        event_id: eventData?.id,
-        message: 'Event processed successfully' 
+        results,
+        message: `${results.length} event(s) processed successfully` 
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
