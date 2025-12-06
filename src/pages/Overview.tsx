@@ -20,67 +20,66 @@ import {
   Search,
   ArrowUpRight,
   ArrowDownRight,
+  Loader2,
 } from "lucide-react";
-import { events, topWallets, shortenAddress, QubicEvent } from "@/data/events";
+import { shortenAddress } from "@/data/events";
 import { EventDetailDialog } from "@/components/EventDetailDialog";
-import { useWhaleDetection } from "@/hooks/useWhaleDetection";
-
-const kpiData = [
-  {
-    title: "Total Events (24h)",
-    value: "12,483",
-    trend: { value: 12.5, isPositive: true },
-    icon: Activity,
-  },
-  {
-    title: "Active Wallets (24h)",
-    value: "3,247",
-    trend: { value: 8.2, isPositive: true },
-    icon: Wallet,
-  },
-  {
-    title: "Whales Detected (24h)",
-    value: "47",
-    trend: { value: 3.1, isPositive: false },
-    icon: Fish,
-  },
-  {
-    title: "Airdrops Sent (24h)",
-    value: "892",
-    trend: { value: 24.8, isPositive: true },
-    icon: Sparkles,
-  },
-];
+import { useWhaleDetection, parseAmount } from "@/hooks/useWhaleDetection";
+import { useQxEvents } from "@/hooks/useQxEvents";
+import { useKPIStats } from "@/hooks/useKPIStats";
+import { DisplayEvent } from "@/types/qxEvent";
 
 function getEventBadgeVariant(type: string) {
   switch (type) {
-    case "Buy":
+    case "AddToBidOrder":
       return "default";
-    case "Sell":
+    case "AddToAskOrder":
       return "destructive";
-    case "Transfer":
+    case "TransferShareOwnershipAndPossession":
       return "secondary";
-    case "Contract Call":
+    case "IssueAsset":
       return "outline";
     default:
       return "secondary";
   }
 }
 
+function getEventTypeLabel(type: string) {
+  const labels: Record<string, string> = {
+    IssueAsset: "Issue Asset",
+    AddToAskOrder: "Ask Order",
+    AddToBidOrder: "Bid Order",
+    TransferShareOwnershipAndPossession: "Transfer",
+    RemoveFromAskOrder: "Cancel Ask",
+    RemoveFromBidOrder: "Cancel Bid",
+    TransferShareManagementRights: "Mgmt Transfer",
+  };
+  return labels[type] || type;
+}
+
 export default function Overview() {
-  const [selectedEvent, setSelectedEvent] = useState<QubicEvent | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<DisplayEvent | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [tokenFilter, setTokenFilter] = useState("all-tokens");
   const [typeFilter, setTypeFilter] = useState("all-types");
   const [timeFilter, setTimeFilter] = useState("all");
-  const { detectWhaleInEvent, getEventsWithWhaleStatus, whaleThresholds } = useWhaleDetection();
+  const { isWhale, whaleThresholds } = useWhaleDetection();
   const prevWhaleCountRef = useRef<number | null>(null);
+
+  const { data: events = [], isLoading: eventsLoading } = useQxEvents(50);
+  const { data: kpiStats } = useKPIStats();
+
+  // Detect whale events
+  const detectWhaleInEvent = (event: DisplayEvent): boolean => {
+    const amount = parseAmount(event.amount);
+    return isWhale(event.token, amount);
+  };
 
   // Find whale events based on current thresholds
   const whaleEvents = useMemo(() => {
     return events.filter((e) => detectWhaleInEvent(e));
-  }, [detectWhaleInEvent]);
+  }, [events, whaleThresholds]);
 
   const whaleEvent = whaleEvents[0] || events[0];
 
@@ -88,7 +87,6 @@ export default function Overview() {
   useEffect(() => {
     const currentCount = whaleEvents.length;
     
-    // Only show toast after initial load and when count changes
     if (prevWhaleCountRef.current !== null && currentCount > 0 && currentCount !== prevWhaleCountRef.current) {
       toast({
         title: "🐋 Whale Activity Detected!",
@@ -99,7 +97,7 @@ export default function Overview() {
     prevWhaleCountRef.current = currentCount;
   }, [whaleEvents.length, whaleThresholds]);
 
-  const handleEventClick = (event: QubicEvent) => {
+  const handleEventClick = (event: DisplayEvent) => {
     setSelectedEvent(event);
     setDialogOpen(true);
   };
@@ -110,9 +108,9 @@ export default function Overview() {
     if (query) {
       const matchesFrom = event.from.toLowerCase().includes(query);
       const matchesTo = event.to.toLowerCase().includes(query);
-      const matchesLabel = event.label?.toLowerCase().includes(query);
       const matchesTick = event.tickNo.replace(/,/g, "").includes(query.replace(/,/g, ""));
-      if (!matchesFrom && !matchesTo && !matchesLabel && !matchesTick) {
+      const matchesToken = event.token.toLowerCase().includes(query);
+      if (!matchesFrom && !matchesTo && !matchesTick && !matchesToken) {
         return false;
       }
     }
@@ -131,17 +129,16 @@ export default function Overview() {
     }
 
     if (typeFilter !== "all-types") {
-      // Special handling for whale filter - check dynamically detected whales
       if (typeFilter === "whale") {
         if (!detectWhaleInEvent(event)) {
           return false;
         }
       } else {
         const typeMap: Record<string, string> = {
-          buy: "Buy",
-          sell: "Sell",
-          transfer: "Transfer",
-          contract: "Contract Call",
+          bid: "AddToBidOrder",
+          ask: "AddToAskOrder",
+          transfer: "TransferShareOwnershipAndPossession",
+          issue: "IssueAsset",
         };
         if (event.type !== typeMap[typeFilter]) {
           return false;
@@ -151,7 +148,7 @@ export default function Overview() {
 
     if (timeFilter !== "all") {
       const time = event.time.toLowerCase();
-      if (timeFilter === "1h" && !time.includes("min")) {
+      if (timeFilter === "1h" && !time.includes("min") && !time.includes("just")) {
         return false;
       } else if (timeFilter === "24h" && (time.includes("day") || time.includes("week"))) {
         return false;
@@ -162,6 +159,56 @@ export default function Overview() {
   });
 
   const liveEvents = filteredEvents.slice(0, 5);
+
+  // Get unique tokens from events for top wallets calculation
+  const topWallets = useMemo(() => {
+    const walletVolumes = new Map<string, number>();
+    events.forEach((event) => {
+      const amount = parseAmount(event.amount);
+      const current = walletVolumes.get(event.from) || 0;
+      walletVolumes.set(event.from, current + amount);
+    });
+    
+    return Array.from(walletVolumes.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([address, volume]) => ({
+        address,
+        volume: volume >= 1000000 ? `${(volume / 1000000).toFixed(1)}M` : 
+                volume >= 1000 ? `${(volume / 1000).toFixed(0)}K` : 
+                volume.toLocaleString(),
+      }));
+  }, [events]);
+
+  const kpiData = [
+    {
+      title: "Total Events (24h)",
+      value: kpiStats?.totalEvents24h?.toLocaleString() || "0",
+      trend: { value: 0, isPositive: true },
+      icon: Activity,
+    },
+    {
+      title: "Active Wallets (24h)",
+      value: kpiStats?.activeWallets24h?.toLocaleString() || "0",
+      trend: { value: 0, isPositive: true },
+      icon: Wallet,
+    },
+    {
+      title: "Whales Detected (24h)",
+      value: kpiStats?.whalesDetected24h?.toLocaleString() || "0",
+      trend: { value: 0, isPositive: false },
+      icon: Fish,
+    },
+    {
+      title: "Total Volume (24h)",
+      value: kpiStats?.totalVolume24h ? 
+        (kpiStats.totalVolume24h >= 1000000 ? 
+          `${(kpiStats.totalVolume24h / 1000000).toFixed(1)}M` : 
+          kpiStats.totalVolume24h.toLocaleString()) : "0",
+      trend: { value: 0, isPositive: true },
+      icon: Sparkles,
+    },
+  ];
 
   return (
     <DashboardLayout title="Overview">
@@ -177,13 +224,13 @@ export default function Overview() {
         {/* Live Events Feed - Takes 2 columns */}
         <Card className="lg:col-span-2 gradient-card border-border">
           <CardHeader>
-            <CardTitle className="text-xl">Live Qubic Events</CardTitle>
+            <CardTitle className="text-xl">Live QX Events</CardTitle>
             <div className="flex flex-wrap gap-3 mt-4">
               <div className="flex-1 min-w-[200px]">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search address, label, or tick no..."
+                    placeholder="Search address, token, or tick no..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-10 bg-background/50 border-border"
@@ -212,10 +259,10 @@ export default function Overview() {
                 <SelectContent>
                   <SelectItem value="all-types">All Types</SelectItem>
                   <SelectItem value="whale">🐋 Whale</SelectItem>
-                  <SelectItem value="buy">Buy</SelectItem>
-                  <SelectItem value="sell">Sell</SelectItem>
+                  <SelectItem value="bid">Bid Order</SelectItem>
+                  <SelectItem value="ask">Ask Order</SelectItem>
                   <SelectItem value="transfer">Transfer</SelectItem>
-                  <SelectItem value="contract">Contract</SelectItem>
+                  <SelectItem value="issue">Issue Asset</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={timeFilter} onValueChange={setTimeFilter}>
@@ -232,64 +279,74 @@ export default function Overview() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {liveEvents.map((event, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => handleEventClick(event)}
-                  className="flex items-center justify-between p-4 rounded-lg bg-background/30 border border-border hover:border-primary/30 transition-smooth cursor-pointer"
-                >
-                  <div className="flex items-center gap-4 flex-1">
-                    <Badge variant={getEventBadgeVariant(event.type)}>
-                      {event.type}
-                    </Badge>
-                    {detectWhaleInEvent(event) && (
-                      <Badge
-                        variant="outline"
-                        className="text-xs border-amber-500/50 text-amber-500 bg-amber-500/10"
-                      >
-                        🐋 Whale
+            {eventsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            ) : liveEvents.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                No events yet. Waiting for data from n8n webhook...
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {liveEvents.map((event) => (
+                  <div
+                    key={event.id}
+                    onClick={() => handleEventClick(event)}
+                    className="flex items-center justify-between p-4 rounded-lg bg-background/30 border border-border hover:border-primary/30 transition-smooth cursor-pointer"
+                  >
+                    <div className="flex items-center gap-4 flex-1">
+                      <Badge variant={getEventBadgeVariant(event.type)}>
+                        {getEventTypeLabel(event.type)}
                       </Badge>
-                    )}
-                    <span className="font-mono text-sm text-muted-foreground">
-                      {event.token}
-                    </span>
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="font-mono text-foreground">
-                        {shortenAddress(event.from)}
-                      </span>
-                      {event.type === "Buy" ? (
-                        <ArrowUpRight className="w-4 h-4 text-success" />
-                      ) : (
-                        <ArrowDownRight className="w-4 h-4 text-muted-foreground" />
+                      {detectWhaleInEvent(event) && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs border-amber-500/50 text-amber-500 bg-amber-500/10"
+                        >
+                          🐋 Whale
+                        </Badge>
                       )}
-                      <span className="font-mono text-foreground">
-                        {shortenAddress(event.to)}
+                      <span className="font-mono text-sm text-muted-foreground">
+                        {event.token}
                       </span>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="font-mono text-foreground">
+                          {shortenAddress(event.from)}
+                        </span>
+                        {event.type === "AddToBidOrder" ? (
+                          <ArrowUpRight className="w-4 h-4 text-success" />
+                        ) : (
+                          <ArrowDownRight className="w-4 h-4 text-muted-foreground" />
+                        )}
+                        <span className="font-mono text-foreground">
+                          {shortenAddress(event.to)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="font-mono font-semibold text-foreground">
+                        {event.amount}
+                      </span>
+                      <span className="text-sm text-muted-foreground w-20 text-right">
+                        {event.time}
+                      </span>
+                      <div className="flex flex-col items-end gap-1 min-w-[120px]">
+                        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                          Tick no
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className="text-xs border-primary/30 text-primary"
+                        >
+                          {event.tickNo}
+                        </Badge>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <span className="font-mono font-semibold text-foreground">
-                      {event.amount}
-                    </span>
-                    <span className="text-sm text-muted-foreground w-20 text-right">
-                      {event.time}
-                    </span>
-                    <div className="flex flex-col items-end gap-1 min-w-[120px]">
-                      <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                        Tick no
-                      </span>
-                      <Badge
-                        variant="outline"
-                        className="text-xs border-primary/30 text-primary"
-                      >
-                        {event.tickNo}
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -320,63 +377,71 @@ export default function Overview() {
           <Card className="gradient-card border-border">
             <CardHeader>
               <CardTitle className="text-lg">Top 5 Wallets</CardTitle>
-              <p className="text-sm text-muted-foreground">By volume (24h)</p>
+              <p className="text-sm text-muted-foreground">By volume</p>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {topWallets.map((wallet, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between p-3 rounded-lg bg-background/30 border border-border"
-                  >
-                    <span className="font-mono text-sm text-foreground">
-                      {shortenAddress(wallet.address)}
-                    </span>
-                    <span className="font-mono font-semibold text-primary">
-                      {wallet.volume}
-                    </span>
+                {topWallets.length === 0 ? (
+                  <div className="text-center py-4 text-muted-foreground text-sm">
+                    No wallet data yet
                   </div>
-                ))}
+                ) : (
+                  topWallets.map((wallet, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-3 rounded-lg bg-background/30 border border-border"
+                    >
+                      <span className="font-mono text-sm text-foreground">
+                        {shortenAddress(wallet.address)}
+                      </span>
+                      <span className="font-mono font-semibold text-primary">
+                        {wallet.volume}
+                      </span>
+                    </div>
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>
 
           {/* Recent Whale Event */}
-          <Card
-            onClick={() => handleEventClick(whaleEvent)}
-            className="gradient-card border-border border-primary/20 glow-primary cursor-pointer hover:border-primary/40 transition-smooth"
-          >
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Fish className="w-5 h-5 text-primary" />
-                Most Recent Whale
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Wallet</span>
-                  <span className="font-mono text-sm text-foreground">
-                    {shortenAddress(whaleEvent.from)}
-                  </span>
+          {whaleEvent && (
+            <Card
+              onClick={() => handleEventClick(whaleEvent)}
+              className="gradient-card border-border border-primary/20 glow-primary cursor-pointer hover:border-primary/40 transition-smooth"
+            >
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Fish className="w-5 h-5 text-primary" />
+                  Most Recent Whale
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Wallet</span>
+                    <span className="font-mono text-sm text-foreground">
+                      {shortenAddress(whaleEvent.from)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Type</span>
+                    <Badge variant="default">{getEventTypeLabel(whaleEvent.type)}</Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Amount</span>
+                    <span className="font-mono font-semibold text-primary">
+                      {whaleEvent.amount}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Time</span>
+                    <span className="text-sm text-foreground">{whaleEvent.time}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Type</span>
-                  <Badge variant="default">{whaleEvent.type}</Badge>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Amount</span>
-                  <span className="font-mono font-semibold text-primary">
-                    {whaleEvent.amount}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Time</span>
-                  <span className="text-sm text-foreground">{whaleEvent.time}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
 
