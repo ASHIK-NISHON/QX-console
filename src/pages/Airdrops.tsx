@@ -14,9 +14,11 @@ import {
 } from "@/components/ui/select";
 import { Sparkles, Settings2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useUniqueTokens } from "@/hooks/useUniqueTokens";
 
 export default function Airdrops() {
   const { toast } = useToast();
+  const uniqueTokens = useUniqueTokens();
 
   const handleTestRule = () => {
     toast({
@@ -46,63 +48,6 @@ export default function Airdrops() {
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Welcome Buyer Airdrop */}
-            <Card className="gradient-card border-border hover:border-primary/30 transition-smooth">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg">Welcome Buyer Airdrop</CardTitle>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      When a wallet's first QUBIC purchase is detected, send a small
-                      welcome airdrop.
-                    </p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">•</span>
-                    <span>First purchase only</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">•</span>
-                    <span>Minimum purchase: 100 QUBIC</span>
-                  </div>
-                </div>
-                <div className="pt-3 border-t border-border">
-                  <div className="flex items-center justify-between mb-2">
-                    <Label className="text-sm">Airdrop Amount</Label>
-                    <Input
-                      type="number"
-                      defaultValue="50"
-                      className="w-24 h-8 text-sm"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm">Token</Label>
-                    <Select defaultValue="qubic">
-                      <SelectTrigger className="w-24 h-8 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="qubic">QUBIC</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="flex gap-1 pt-2">
-                  <Badge variant="outline" className="text-xs">
-                    Telegram
-                  </Badge>
-                  <Badge variant="outline" className="text-xs">
-                    Discord
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-
             {/* High-Volume Buyer Reward */}
             <Card className="gradient-card border-border hover:border-primary/30 transition-smooth">
               <CardHeader>
@@ -112,8 +57,7 @@ export default function Airdrops() {
                       High-Volume Buyer Reward
                     </CardTitle>
                     <p className="text-sm text-muted-foreground mt-2">
-                      If a wallet buys more than threshold in 24h, send a bonus
-                      airdrop.
+                      When a wallet buys more than threshold shares in 24h, send a bonus airdrop.
                     </p>
                   </div>
                   <Switch />
@@ -122,7 +66,7 @@ export default function Airdrops() {
               <CardContent className="space-y-3">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <Label className="text-sm">Volume Threshold</Label>
+                    <Label className="text-sm">Shares Threshold</Label>
                     <Input
                       type="number"
                       defaultValue="10000"
@@ -139,12 +83,16 @@ export default function Airdrops() {
                   </div>
                   <div className="flex items-center justify-between">
                     <Label className="text-sm">Token</Label>
-                    <Select defaultValue="qubic">
+                    <Select defaultValue="QUBIC">
                       <SelectTrigger className="w-32 h-8 text-sm">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="qubic">QUBIC</SelectItem>
+                        {uniqueTokens.map((token) => (
+                          <SelectItem key={token} value={token}>
+                            {token}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -157,15 +105,14 @@ export default function Airdrops() {
               </CardContent>
             </Card>
 
-            {/* Loyal Holder Bonus */}
+            {/* Ask Order Completion Reward */}
             <Card className="gradient-card border-border hover:border-primary/30 transition-smooth">
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <CardTitle className="text-lg">Loyal Holder Bonus</CardTitle>
+                    <CardTitle className="text-lg">Ask Order Completion Reward</CardTitle>
                     <p className="text-sm text-muted-foreground mt-2">
-                      If a wallet holds QUBIC for more than N days and crosses volume
-                      threshold, send a reward.
+                      When a wallet completes an ask order above threshold, reward them with an airdrop.
                     </p>
                   </div>
                   <Switch />
@@ -174,15 +121,7 @@ export default function Airdrops() {
               <CardContent className="space-y-3">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <Label className="text-sm">Holding Period (days)</Label>
-                    <Input
-                      type="number"
-                      defaultValue="30"
-                      className="w-24 h-8 text-sm"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm">Volume Threshold</Label>
+                    <Label className="text-sm">Min Shares Sold</Label>
                     <Input
                       type="number"
                       defaultValue="5000"
@@ -190,10 +129,18 @@ export default function Airdrops() {
                     />
                   </div>
                   <div className="flex items-center justify-between">
+                    <Label className="text-sm">Min Price</Label>
+                    <Input
+                      type="number"
+                      defaultValue="50"
+                      className="w-32 h-8 text-sm"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
                     <Label className="text-sm">Airdrop Amount</Label>
                     <Input
                       type="number"
-                      defaultValue="500"
+                      defaultValue="100"
                       className="w-32 h-8 text-sm"
                     />
                   </div>
@@ -204,9 +151,6 @@ export default function Airdrops() {
                   </Badge>
                   <Badge variant="outline" className="text-xs">
                     Discord
-                  </Badge>
-                  <Badge variant="outline" className="text-xs">
-                    X
                   </Badge>
                 </div>
               </CardContent>
@@ -229,29 +173,36 @@ export default function Airdrops() {
               <div className="space-y-4">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="text-muted-foreground">When</span>
-                  <Select defaultValue="buy">
-                    <SelectTrigger className="w-36 h-9">
+                  <Select defaultValue="AddToBidOrder">
+                    <SelectTrigger className="w-44 h-9">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="buy">Buy</SelectItem>
-                      <SelectItem value="sell">Sell</SelectItem>
-                      <SelectItem value="transfer">Transfer</SelectItem>
-                      <SelectItem value="contract">Contract Call</SelectItem>
+                      <SelectItem value="AddToBidOrder">Add Bid Order</SelectItem>
+                      <SelectItem value="AddToAskOrder">Add Ask Order</SelectItem>
+                      <SelectItem value="RemoveFromBidOrder">Remove Bid Order</SelectItem>
+                      <SelectItem value="RemoveFromAskOrder">Remove Ask Order</SelectItem>
+                      <SelectItem value="TransferShareOwnershipAndPossession">Transfer Shares</SelectItem>
+                      <SelectItem value="IssueAsset">Issue Asset</SelectItem>
                     </SelectContent>
                   </Select>
 
                   <span className="text-muted-foreground">on</span>
-                  <Select defaultValue="qubic">
-                    <SelectTrigger className="w-24 h-9">
+                  <Select defaultValue="any">
+                    <SelectTrigger className="w-28 h-9">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="qubic">QUBIC</SelectItem>
+                      <SelectItem value="any">Any Token</SelectItem>
+                      {uniqueTokens.map((token) => (
+                        <SelectItem key={token} value={token}>
+                          {token}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
 
-                  <span className="text-muted-foreground">where amount</span>
+                  <span className="text-muted-foreground">where shares</span>
                   <Select defaultValue="greater">
                     <SelectTrigger className="w-20 h-9">
                       <SelectValue />
@@ -288,12 +239,16 @@ export default function Airdrops() {
                     className="w-28 h-9"
                   />
 
-                  <Select defaultValue="qubic">
-                    <SelectTrigger className="w-24 h-9">
+                  <Select defaultValue="QUBIC">
+                    <SelectTrigger className="w-28 h-9">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="qubic">QUBIC</SelectItem>
+                      {uniqueTokens.map((token) => (
+                        <SelectItem key={token} value={token}>
+                          {token}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

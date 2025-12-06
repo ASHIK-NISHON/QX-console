@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Bell, MessageSquare, Hash, Twitter, AlertCircle, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useUniqueTokens } from "@/hooks/useUniqueTokens";
 
 // Mock integration status - in real app, this would come from state/API
 const integrationStatus = {
@@ -29,56 +30,36 @@ const channelNames = {
 const alertTemplates = [
   {
     name: "Whale Buy Alert",
-    description: "Trigger when a whale wallet buys more than 10K QUBIC in 1 hour",
-    condition: "Buy > 10,000 QUBIC in 1h from whale wallet",
+    description: "Trigger when a whale wallet adds a bid order with shares above threshold",
+    condition: "AddToBidOrder > 10,000 shares from whale wallet",
     enabled: true,
     channels: ["telegram", "discord"],
   },
   {
     name: "Whale Sell Alert",
-    description: "Trigger when a whale wallet sells more than 5K QUBIC in 1 hour",
-    condition: "Sell > 5,000 QUBIC in 1h from whale wallet",
+    description: "Trigger when a whale wallet adds an ask order with shares above threshold",
+    condition: "AddToAskOrder > 5,000 shares from whale wallet",
     enabled: true,
     channels: ["telegram", "discord", "x"],
-  },
-  {
-    name: "High Volume Spike",
-    description: "Alert when total trading volume increases by 50% in 15 minutes",
-    condition: "Volume spike > 50% in 15min",
-    enabled: false,
-    channels: ["discord"],
-  },
-  {
-    name: "New Active Wallet",
-    description: "Notify when a previously inactive wallet becomes active",
-    condition: "Wallet inactive > 30d makes first transaction",
-    enabled: true,
-    channels: ["telegram"],
   },
 ];
 
 const recentAlerts = [
   {
     type: "Whale Buy",
-    message: "Whale Qb3x...k9d2 bought 15,420 QUBIC",
+    message: "Whale EJAV...VYJC added bid order for 15,420 QXMR shares",
     channels: "Telegram, Discord",
     time: "2 min ago",
   },
   {
     type: "Whale Sell",
-    message: "Whale Qm5t...r4c9 sold 8,750 QUBIC",
+    message: "Whale QXMR...OEYB added ask order for 8,750 shares",
     channels: "Telegram, Discord, X",
     time: "1 hour ago",
   },
   {
-    type: "New Active",
-    message: "Wallet Qa2c...f8e1 became active after 45 days",
-    channels: "Telegram",
-    time: "3 hours ago",
-  },
-  {
     type: "Whale Buy",
-    message: "Whale Qr8n...d2s5 bought 23,100 QUBIC",
+    message: "Whale ABCD...XYZ1 added bid order for 23,100 CFB shares",
     channels: "Telegram, Discord",
     time: "5 hours ago",
   },
@@ -86,6 +67,7 @@ const recentAlerts = [
 
 export default function Alerts() {
   const { toast } = useToast();
+  const uniqueTokens = useUniqueTokens();
 
   const handleTestAlert = () => {
     toast({
@@ -268,7 +250,7 @@ export default function Alerts() {
                 <Label htmlFor="alert-name">Alert Name</Label>
                 <Input
                   id="alert-name"
-                  placeholder="e.g., Large Transaction Alert"
+                  placeholder="e.g., Large Bid Order Alert"
                   className="bg-background/50 border-border"
                 />
               </div>
@@ -288,43 +270,48 @@ export default function Alerts() {
                 <Label className="text-base">Alert Condition</Label>
                 <div className="flex flex-wrap items-center gap-3 p-4 rounded-lg bg-background/30 border border-border">
                   <span className="text-sm text-muted-foreground">When</span>
-                  <Select defaultValue="buy">
-                    <SelectTrigger className="w-[140px] bg-background border-border">
+                  <Select defaultValue="AddToBidOrder">
+                    <SelectTrigger className="w-[160px] bg-background border-border">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="buy">Buy</SelectItem>
-                      <SelectItem value="sell">Sell</SelectItem>
-                      <SelectItem value="transfer">Transfer</SelectItem>
-                      <SelectItem value="contract">Contract Call</SelectItem>
+                      <SelectItem value="AddToBidOrder">Add Bid Order</SelectItem>
+                      <SelectItem value="AddToAskOrder">Add Ask Order</SelectItem>
+                      <SelectItem value="RemoveFromBidOrder">Remove Bid Order</SelectItem>
+                      <SelectItem value="RemoveFromAskOrder">Remove Ask Order</SelectItem>
+                      <SelectItem value="TransferShareOwnershipAndPossession">Transfer Shares</SelectItem>
+                      <SelectItem value="IssueAsset">Issue Asset</SelectItem>
                     </SelectContent>
                   </Select>
 
                   <span className="text-sm text-muted-foreground">on</span>
-                  <Select defaultValue="qubic">
+                  <Select defaultValue="any">
                     <SelectTrigger className="w-[120px] bg-background border-border">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="qubic">QUBIC</SelectItem>
                       <SelectItem value="any">Any Token</SelectItem>
+                      {uniqueTokens.map((token) => (
+                        <SelectItem key={token} value={token}>
+                          {token}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
 
                   <span className="text-sm text-muted-foreground">where</span>
-                  <Select defaultValue="amount">
-                    <SelectTrigger className="w-[140px] bg-background border-border">
+                  <Select defaultValue="shares">
+                    <SelectTrigger className="w-[120px] bg-background border-border">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="amount">Amount</SelectItem>
-                      <SelectItem value="volume">Volume</SelectItem>
-                      <SelectItem value="frequency">Frequency</SelectItem>
+                      <SelectItem value="shares">Shares</SelectItem>
+                      <SelectItem value="price">Price</SelectItem>
                     </SelectContent>
                   </Select>
 
                   <Select defaultValue="greater">
-                    <SelectTrigger className="w-[100px] bg-background border-border">
+                    <SelectTrigger className="w-[80px] bg-background border-border">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -337,21 +324,8 @@ export default function Alerts() {
                   <Input
                     type="number"
                     placeholder="10000"
-                    className="w-[140px] bg-background border-border"
+                    className="w-[120px] bg-background border-border"
                   />
-
-                  <span className="text-sm text-muted-foreground">in</span>
-                  <Select defaultValue="1h">
-                    <SelectTrigger className="w-[100px] bg-background border-border">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="5m">5 min</SelectItem>
-                      <SelectItem value="15m">15 min</SelectItem>
-                      <SelectItem value="1h">1 hour</SelectItem>
-                      <SelectItem value="24h">24 hours</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
               </div>
 
@@ -441,16 +415,12 @@ export default function Alerts() {
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  onClick={handleTestAlert}
-                  className="border-primary/30 hover:bg-primary/10"
-                >
+              {/* Buttons */}
+              <div className="flex gap-3 pt-2">
+                <Button variant="outline" className="flex-1" onClick={handleTestAlert}>
                   Test Alert
                 </Button>
-                <Button className="bg-primary hover:bg-primary/90">
+                <Button className="flex-1 bg-primary hover:bg-primary/90">
                   Activate Alert
                 </Button>
               </div>
@@ -460,31 +430,21 @@ export default function Alerts() {
 
         {/* Recent Alerts */}
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold">Recent Alert Activity</h2>
+          <h2 className="text-xl font-semibold">Recent Alerts</h2>
           <Card className="gradient-card border-border">
-            <CardHeader>
-              <CardTitle className="text-lg">Last 5 Alerts Fired</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
+            <CardContent className="p-0">
+              <div className="divide-y divide-border">
                 {recentAlerts.map((alert, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between p-4 rounded-lg bg-background/30 border border-border"
-                  >
-                    <div className="flex items-center gap-4 flex-1">
-                      <Badge variant="outline" className="border-primary/30 text-primary">
+                  <div key={idx} className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Badge variant="outline" className="text-xs">
                         {alert.type}
                       </Badge>
-                      <p className="text-sm">{alert.message}</p>
+                      <span className="text-sm">{alert.message}</span>
                     </div>
-                    <div className="flex items-center gap-4 text-sm">
-                      <span className="text-muted-foreground">
-                        {alert.channels}
-                      </span>
-                      <span className="text-muted-foreground w-24 text-right">
-                        {alert.time}
-                      </span>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <span>{alert.channels}</span>
+                      <span>{alert.time}</span>
                     </div>
                   </div>
                 ))}
