@@ -53,6 +53,13 @@ export default function Integrations() {
                 />
               </div>
               <div className="space-y-2">
+                <Label>Chat ID</Label>
+                <Input
+                  placeholder="Enter your Chat ID (e.g., -1001234567890)"
+                  className="font-mono text-sm"
+                />
+              </div>
+              <div className="space-y-2">
                 <Label>Channel Name (optional)</Label>
                 <Input
                   placeholder="@qubic_activity"
@@ -135,35 +142,61 @@ export default function Integrations() {
                     Post alerts to X timeline
                   </p>
                 </div>
-                <Badge
-                  variant="outline"
-                  className="gap-1.5 border-destructive/30 text-destructive"
-                >
-                  <XCircle className="w-3 h-3" />
-                  Not Connected
-                </Badge>
+                <div className="flex flex-col items-end gap-1">
+                  <Badge
+                    variant="outline"
+                    className="gap-1.5 border-destructive/30 text-destructive"
+                  >
+                    <XCircle className="w-3 h-3" />
+                    Not Connected
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">OAuth 1.0a</span>
+                </div>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Client ID</Label>
+                  <Label>API Key</Label>
                   <Input
                     type="password"
-                    placeholder="Enter your X Client ID"
+                    placeholder="Enter your X API Key"
                     className="font-mono text-sm"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Client Secret</Label>
+                  <Label>API Secret</Label>
                   <Input
                     type="password"
-                    placeholder="Enter your X Client Secret"
+                    placeholder="Enter your X API Secret"
+                    className="font-mono text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Access Token</Label>
+                  <Input
+                    type="password"
+                    placeholder="Enter your X Access Token"
+                    className="font-mono text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Access Secret</Label>
+                  <Input
+                    type="password"
+                    placeholder="Enter your X Access Secret"
                     className="font-mono text-sm"
                   />
                 </div>
               </div>
-              <div className="flex gap-2 mt-4">
+              <div className="space-y-2">
+                <Label>Channel Name (optional)</Label>
+                <Input
+                  placeholder="@your_twitter_handle"
+                  className="font-mono text-sm"
+                />
+              </div>
+              <div className="flex gap-2">
                 <Button variant="outline" className="flex-1">
                   Test Connection
                 </Button>
