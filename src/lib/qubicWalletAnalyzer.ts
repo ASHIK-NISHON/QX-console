@@ -169,7 +169,7 @@ export class QubicRpcClient {
   }
 
   async getLatestTick(): Promise<number> {
-    const data = await this.request<{ latestTick: number }>("/v2/latestTick");
+    const data = await this.request<{ latestTick: number }>("/v1/latestTick");
     return data.latestTick;
   }
 
