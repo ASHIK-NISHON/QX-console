@@ -83,7 +83,7 @@ export function AdvancedWalletDialog({ open, onOpenChange, data, isLoading, addr
 
               {/* Network Status */}
               <div className="flex items-center gap-2">
-                {data.network_info.status === 'connected' ? (
+                {data.valid && stats ? (
                   <>
                     <CheckCircle className="w-4 h-4 text-green-500" />
                     <span className="text-sm text-green-500">Connected to Qubic Network</span>
@@ -96,7 +96,9 @@ export function AdvancedWalletDialog({ open, onOpenChange, data, isLoading, addr
                 ) : (
                   <>
                     <XCircle className="w-4 h-4 text-destructive" />
-                    <span className="text-sm text-destructive">Disconnected</span>
+                    <span className="text-sm text-destructive">
+                      {data.error || 'Failed to fetch wallet data'}
+                    </span>
                   </>
                 )}
               </div>
