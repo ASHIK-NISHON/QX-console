@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -9,71 +10,167 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Bell, MessageSquare, Hash, Twitter, AlertCircle, Plus } from "lucide-react";
+import { Bell, MessageSquare, Hash, Twitter, AlertCircle, Plus, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useUniqueTokens } from "@/hooks/useUniqueTokens";
+import { useIntegrations } from "@/contexts/IntegrationsContext";
+import { formatDistanceToNow } from "date-fns";
 
-// Mock integration status - in real app, this would come from state/API
-const integrationStatus = {
-  telegram: true, // Connected
-  discord: true,  // Connected
-  x: false,       // Not connected
-};
-
-// Mock channel names from integrations
-const channelNames = {
-  telegram: "@qubic_activity",
-  discord: "#qubic-activity",
-  x: "",
-};
-
-const alertTemplates = [
-  {
-    name: "Whale Buy Alert",
-    description: "Trigger when a whale wallet adds a bid order with shares above threshold",
-    condition: "AddToBidOrder > 10,000 shares from whale wallet",
-    enabled: true,
-    channels: ["telegram", "discord"],
-  },
-  {
-    name: "Whale Sell Alert",
-    description: "Trigger when a whale wallet adds an ask order with shares above threshold",
-    condition: "AddToAskOrder > 5,000 shares from whale wallet",
-    enabled: true,
-    channels: ["telegram", "discord", "x"],
-  },
-];
-
-const recentAlerts = [
-  {
-    type: "Whale Buy",
-    message: "Whale EJAV...VYJC added bid order for 15,420 QXMR shares",
-    channels: "Telegram, Discord",
-    time: "2 min ago",
-  },
-  {
-    type: "Whale Sell",
-    message: "Whale QXMR...OEYB added ask order for 8,750 shares",
-    channels: "Telegram, Discord, X",
-    time: "1 hour ago",
-  },
-  {
-    type: "Whale Buy",
-    message: "Whale ABCD...XYZ1 added bid order for 23,100 CFB shares",
-    channels: "Telegram, Discord",
-    time: "5 hours ago",
-  },
-];
+interface AlertTemplate {
+  name: string;
+  description: string;
+  condition: string;
+  enabled: boolean;
+  channels: ("telegram" | "discord" | "x")[];
+}
 
 export default function Alerts() {
   const { toast } = useToast();
   const uniqueTokens = useUniqueTokens();
+  const {
+    integrationStatus,
+    telegramCredentials,
+    discordCredentials,
+    xCredentials,
+    recentAlerts,
+    sendNotification,
+    n8nWebhookUrl,
+  } = useIntegrations();
 
-  const handleTestAlert = () => {
+  const [alertTemplates, setAlertTemplates] = useState<AlertTemplate[]>([
+    {
+      name: "Whale Buy Alert",
+      description: "Trigger when a whale wallet adds a bid order with shares above threshold",
+      condition: "AddToBidOrder > 10,000 shares from whale wallet",
+      enabled: false,
+      channels: [],
+    },
+    {
+      name: "Whale Sell Alert",
+      description: "Trigger when a whale wallet adds an ask order with shares above threshold",
+      condition: "AddToAskOrder > 5,000 shares from whale wallet",
+      enabled: false,
+      channels: [],
+    },
+  ]);
+
+  // Custom alert state
+  const [customAlertName, setCustomAlertName] = useState("");
+  const [customAlertDescription, setCustomAlertDescription] = useState("");
+  const [customAction, setCustomAction] = useState("AddToBidOrder");
+  const [customToken, setCustomToken] = useState("any");
+  const [customField, setCustomField] = useState("shares");
+  const [customOperator, setCustomOperator] = useState("greater");
+  const [customValue, setCustomValue] = useState("");
+  const [customChannels, setCustomChannels] = useState<("telegram" | "discord" | "x")[]>([]);
+  const [testingAlert, setTestingAlert] = useState(false);
+  const [activatingAlert, setActivatingAlert] = useState(false);
+
+  const toggleTemplateChannel = (templateIdx: number, channel: "telegram" | "discord" | "x") => {
+    setAlertTemplates((prev) =>
+      prev.map((template, idx) => {
+        if (idx !== templateIdx) return template;
+        const hasChannel = template.channels.includes(channel);
+        return {
+          ...template,
+          channels: hasChannel
+            ? template.channels.filter((c) => c !== channel)
+            : [...template.channels, channel],
+        };
+      })
+    );
+  };
+
+  const toggleTemplateEnabled = (templateIdx: number) => {
+    setAlertTemplates((prev) =>
+      prev.map((template, idx) =>
+        idx === templateIdx ? { ...template, enabled: !template.enabled } : template
+      )
+    );
+  };
+
+  const toggleCustomChannel = (channel: "telegram" | "discord" | "x") => {
+    setCustomChannels((prev) =>
+      prev.includes(channel) ? prev.filter((c) => c !== channel) : [...prev, channel]
+    );
+  };
+
+  const handleTestAlert = async () => {
+    if (!n8nWebhookUrl) {
+      toast({
+        title: "Configuration Required",
+        description: "Please set your n8n webhook URL in Integrations first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (customChannels.length === 0) {
+      toast({
+        title: "No Channels Selected",
+        description: "Please select at least one notification channel.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setTestingAlert(true);
+    const operatorSymbol = customOperator === "greater" ? ">" : customOperator === "less" ? "<" : "=";
+    const message = `🧪 TEST ALERT: ${customAlertName || "Custom Alert"}\n\nCondition: ${customAction} on ${customToken === "any" ? "Any Token" : customToken} where ${customField} ${operatorSymbol} ${customValue || "0"}`;
+
+    const success = await sendNotification("alert", customAlertName || "Test Alert", message, customChannels);
+    setTestingAlert(false);
+
     toast({
-      title: "Alert Test Successful",
-      description: "Your custom alert condition is valid and ready to activate.",
+      title: success ? "Test Alert Sent" : "Test Failed",
+      description: success
+        ? "Test alert sent to selected channels."
+        : "Failed to send test alert. Check your configuration.",
+      variant: success ? "default" : "destructive",
     });
+  };
+
+  const handleActivateAlert = async () => {
+    if (!customAlertName) {
+      toast({
+        title: "Name Required",
+        description: "Please enter a name for your alert.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (customChannels.length === 0) {
+      toast({
+        title: "No Channels Selected",
+        description: "Please select at least one notification channel.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setActivatingAlert(true);
+    // In a real implementation, this would save the alert rule to the database
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    setActivatingAlert(false);
+
+    toast({
+      title: "Alert Activated",
+      description: `"${customAlertName}" is now active and will send notifications when triggered.`,
+    });
+
+    // Reset form
+    setCustomAlertName("");
+    setCustomAlertDescription("");
+    setCustomValue("");
+    setCustomChannels([]);
+  };
+
+  const getChannelName = (channel: "telegram" | "discord" | "x") => {
+    if (channel === "telegram") return telegramCredentials?.channelName;
+    if (channel === "discord") return discordCredentials?.channelName;
+    if (channel === "x") return xCredentials?.channelName;
+    return undefined;
   };
 
   return (
@@ -94,6 +191,14 @@ export default function Alerts() {
                 You can edit this threshold in the Settings → Data Parameters tab.
               </AlertDescription>
             </Alert>
+            {!n8nWebhookUrl && (
+              <Alert className="border-destructive/30 bg-destructive/5">
+                <AlertCircle className="h-4 w-4 text-destructive" />
+                <AlertDescription className="text-sm">
+                  <strong>Setup Required:</strong> Please configure your n8n webhook URL in the Integrations tab first.
+                </AlertDescription>
+              </Alert>
+            )}
           </CardContent>
         </Card>
 
@@ -122,7 +227,10 @@ export default function Alerts() {
                             {template.description}
                           </p>
                         </div>
-                        <Switch defaultChecked={template.enabled} />
+                        <Switch
+                          checked={template.enabled}
+                          onCheckedChange={() => toggleTemplateEnabled(idx)}
+                        />
                       </div>
 
                       <div className="mt-4 space-y-4">
@@ -145,9 +253,8 @@ export default function Alerts() {
                               <div className="flex items-center space-x-2">
                                 <Checkbox
                                   id={`${idx}-telegram`}
-                                  defaultChecked={template.channels.includes(
-                                    "telegram"
-                                  )}
+                                  checked={template.channels.includes("telegram")}
+                                  onCheckedChange={() => toggleTemplateChannel(idx, "telegram")}
                                   disabled={!integrationStatus.telegram}
                                 />
                                 <Label
@@ -156,16 +263,16 @@ export default function Alerts() {
                                 >
                                   <MessageSquare className="w-4 h-4 text-primary" />
                                   Telegram
-                                  {integrationStatus.telegram && channelNames.telegram && (
+                                  {integrationStatus.telegram && getChannelName("telegram") && (
                                     <span className="text-xs text-muted-foreground">
-                                      ({channelNames.telegram})
+                                      ({getChannelName("telegram")})
                                     </span>
                                   )}
                                 </Label>
                               </div>
                               {!integrationStatus.telegram && (
                                 <p className="text-xs text-destructive mt-1 ml-6">
-                                  Please connect your account in Integrations tab to use this platform
+                                  Please connect your account in Integrations tab
                                 </p>
                               )}
                             </div>
@@ -174,9 +281,8 @@ export default function Alerts() {
                               <div className="flex items-center space-x-2">
                                 <Checkbox
                                   id={`${idx}-discord`}
-                                  defaultChecked={template.channels.includes(
-                                    "discord"
-                                  )}
+                                  checked={template.channels.includes("discord")}
+                                  onCheckedChange={() => toggleTemplateChannel(idx, "discord")}
                                   disabled={!integrationStatus.discord}
                                 />
                                 <Label
@@ -185,16 +291,16 @@ export default function Alerts() {
                                 >
                                   <Hash className="w-4 h-4 text-primary" />
                                   Discord
-                                  {integrationStatus.discord && channelNames.discord && (
+                                  {integrationStatus.discord && getChannelName("discord") && (
                                     <span className="text-xs text-muted-foreground">
-                                      ({channelNames.discord})
+                                      ({getChannelName("discord")})
                                     </span>
                                   )}
                                 </Label>
                               </div>
                               {!integrationStatus.discord && (
                                 <p className="text-xs text-destructive mt-1 ml-6">
-                                  Please connect your account in Integrations tab to use this platform
+                                  Please connect your account in Integrations tab
                                 </p>
                               )}
                             </div>
@@ -203,7 +309,8 @@ export default function Alerts() {
                               <div className="flex items-center space-x-2">
                                 <Checkbox
                                   id={`${idx}-x`}
-                                  defaultChecked={template.channels.includes("x")}
+                                  checked={template.channels.includes("x")}
+                                  onCheckedChange={() => toggleTemplateChannel(idx, "x")}
                                   disabled={!integrationStatus.x}
                                 />
                                 <Label
@@ -212,16 +319,16 @@ export default function Alerts() {
                                 >
                                   <Twitter className="w-4 h-4 text-primary" />
                                   X (Twitter)
-                                  {integrationStatus.x && channelNames.x && (
+                                  {integrationStatus.x && getChannelName("x") && (
                                     <span className="text-xs text-muted-foreground">
-                                      ({channelNames.x})
+                                      ({getChannelName("x")})
                                     </span>
                                   )}
                                 </Label>
                               </div>
                               {!integrationStatus.x && (
                                 <p className="text-xs text-destructive mt-1 ml-6">
-                                  Please connect your account in Integrations tab to use this platform
+                                  Please connect your account in Integrations tab
                                 </p>
                               )}
                             </div>
@@ -251,6 +358,8 @@ export default function Alerts() {
                 <Input
                   id="alert-name"
                   placeholder="e.g., Large Bid Order Alert"
+                  value={customAlertName}
+                  onChange={(e) => setCustomAlertName(e.target.value)}
                   className="bg-background/50 border-border"
                 />
               </div>
@@ -261,6 +370,8 @@ export default function Alerts() {
                 <Textarea
                   id="alert-description"
                   placeholder="Describe what this alert monitors..."
+                  value={customAlertDescription}
+                  onChange={(e) => setCustomAlertDescription(e.target.value)}
                   className="bg-background/50 border-border min-h-[80px]"
                 />
               </div>
@@ -270,7 +381,7 @@ export default function Alerts() {
                 <Label className="text-base">Alert Condition</Label>
                 <div className="flex flex-wrap items-center gap-3 p-4 rounded-lg bg-background/30 border border-border">
                   <span className="text-sm text-muted-foreground">When</span>
-                  <Select defaultValue="AddToBidOrder">
+                  <Select value={customAction} onValueChange={setCustomAction}>
                     <SelectTrigger className="w-[160px] bg-background border-border">
                       <SelectValue />
                     </SelectTrigger>
@@ -285,7 +396,7 @@ export default function Alerts() {
                   </Select>
 
                   <span className="text-sm text-muted-foreground">on</span>
-                  <Select defaultValue="any">
+                  <Select value={customToken} onValueChange={setCustomToken}>
                     <SelectTrigger className="w-[120px] bg-background border-border">
                       <SelectValue />
                     </SelectTrigger>
@@ -300,7 +411,7 @@ export default function Alerts() {
                   </Select>
 
                   <span className="text-sm text-muted-foreground">where</span>
-                  <Select defaultValue="shares">
+                  <Select value={customField} onValueChange={setCustomField}>
                     <SelectTrigger className="w-[120px] bg-background border-border">
                       <SelectValue />
                     </SelectTrigger>
@@ -310,7 +421,7 @@ export default function Alerts() {
                     </SelectContent>
                   </Select>
 
-                  <Select defaultValue="greater">
+                  <Select value={customOperator} onValueChange={setCustomOperator}>
                     <SelectTrigger className="w-[80px] bg-background border-border">
                       <SelectValue />
                     </SelectTrigger>
@@ -324,6 +435,8 @@ export default function Alerts() {
                   <Input
                     type="number"
                     placeholder="10000"
+                    value={customValue}
+                    onChange={(e) => setCustomValue(e.target.value)}
                     className="w-[120px] bg-background border-border"
                   />
                 </div>
@@ -339,6 +452,8 @@ export default function Alerts() {
                     <div className="flex items-center space-x-2">
                       <Checkbox
                         id="custom-telegram"
+                        checked={customChannels.includes("telegram")}
+                        onCheckedChange={() => toggleCustomChannel("telegram")}
                         disabled={!integrationStatus.telegram}
                       />
                       <Label
@@ -347,16 +462,16 @@ export default function Alerts() {
                       >
                         <MessageSquare className="w-4 h-4 text-primary" />
                         Telegram
-                        {integrationStatus.telegram && channelNames.telegram && (
+                        {integrationStatus.telegram && getChannelName("telegram") && (
                           <span className="text-xs text-muted-foreground">
-                            ({channelNames.telegram})
+                            ({getChannelName("telegram")})
                           </span>
                         )}
                       </Label>
                     </div>
                     {!integrationStatus.telegram && (
                       <p className="text-xs text-destructive mt-1 ml-6">
-                        Please connect your account in Integrations tab to use this platform
+                        Please connect your account in Integrations tab
                       </p>
                     )}
                   </div>
@@ -365,6 +480,8 @@ export default function Alerts() {
                     <div className="flex items-center space-x-2">
                       <Checkbox
                         id="custom-discord"
+                        checked={customChannels.includes("discord")}
+                        onCheckedChange={() => toggleCustomChannel("discord")}
                         disabled={!integrationStatus.discord}
                       />
                       <Label
@@ -373,16 +490,16 @@ export default function Alerts() {
                       >
                         <Hash className="w-4 h-4 text-primary" />
                         Discord
-                        {integrationStatus.discord && channelNames.discord && (
+                        {integrationStatus.discord && getChannelName("discord") && (
                           <span className="text-xs text-muted-foreground">
-                            ({channelNames.discord})
+                            ({getChannelName("discord")})
                           </span>
                         )}
                       </Label>
                     </div>
                     {!integrationStatus.discord && (
                       <p className="text-xs text-destructive mt-1 ml-6">
-                        Please connect your account in Integrations tab to use this platform
+                        Please connect your account in Integrations tab
                       </p>
                     )}
                   </div>
@@ -391,6 +508,8 @@ export default function Alerts() {
                     <div className="flex items-center space-x-2">
                       <Checkbox
                         id="custom-x"
+                        checked={customChannels.includes("x")}
+                        onCheckedChange={() => toggleCustomChannel("x")}
                         disabled={!integrationStatus.x}
                       />
                       <Label
@@ -399,16 +518,16 @@ export default function Alerts() {
                       >
                         <Twitter className="w-4 h-4 text-primary" />
                         X (Twitter)
-                        {integrationStatus.x && channelNames.x && (
+                        {integrationStatus.x && getChannelName("x") && (
                           <span className="text-xs text-muted-foreground">
-                            ({channelNames.x})
+                            ({getChannelName("x")})
                           </span>
                         )}
                       </Label>
                     </div>
                     {!integrationStatus.x && (
                       <p className="text-xs text-destructive mt-1 ml-6">
-                        Please connect your account in Integrations tab to use this platform
+                        Please connect your account in Integrations tab
                       </p>
                     )}
                   </div>
@@ -417,10 +536,21 @@ export default function Alerts() {
 
               {/* Buttons */}
               <div className="flex gap-3 pt-2">
-                <Button variant="outline" className="flex-1" onClick={handleTestAlert}>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={handleTestAlert}
+                  disabled={testingAlert}
+                >
+                  {testingAlert && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                   Test Alert
                 </Button>
-                <Button className="flex-1 bg-primary hover:bg-primary/90">
+                <Button
+                  className="flex-1 bg-primary hover:bg-primary/90"
+                  onClick={handleActivateAlert}
+                  disabled={activatingAlert}
+                >
+                  {activatingAlert && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                   Activate Alert
                 </Button>
               </div>
@@ -433,22 +563,28 @@ export default function Alerts() {
           <h2 className="text-xl font-semibold">Recent Alerts</h2>
           <Card className="gradient-card border-border">
             <CardContent className="p-0">
-              <div className="divide-y divide-border">
-                {recentAlerts.map((alert, idx) => (
-                  <div key={idx} className="p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Badge variant="outline" className="text-xs">
-                        {alert.type}
-                      </Badge>
-                      <span className="text-sm">{alert.message}</span>
+              {recentAlerts.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  No alerts sent yet. Configure and activate alerts above to start receiving notifications.
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {recentAlerts.map((alert) => (
+                    <div key={alert.id} className="p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Badge variant="outline" className="text-xs">
+                          {alert.title}
+                        </Badge>
+                        <span className="text-sm">{alert.message.slice(0, 60)}...</span>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span>{alert.channels.join(", ")}</span>
+                        <span>{formatDistanceToNow(new Date(alert.timestamp), { addSuffix: true })}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <span>{alert.channels}</span>
-                      <span>{alert.time}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

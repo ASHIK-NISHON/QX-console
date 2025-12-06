@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -5,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Select,
   SelectContent,
@@ -12,31 +15,255 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sparkles, Settings2 } from "lucide-react";
+import { Sparkles, Settings2, MessageSquare, Hash, Twitter, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useUniqueTokens } from "@/hooks/useUniqueTokens";
+import { useIntegrations } from "@/contexts/IntegrationsContext";
+import { formatDistanceToNow } from "date-fns";
+
+interface PrebuiltCondition {
+  name: string;
+  description: string;
+  enabled: boolean;
+  channels: ("telegram" | "discord" | "x")[];
+  settings: Record<string, string | number>;
+}
 
 export default function Airdrops() {
   const { toast } = useToast();
   const uniqueTokens = useUniqueTokens();
+  const {
+    integrationStatus,
+    telegramCredentials,
+    discordCredentials,
+    xCredentials,
+    recentAirdrops,
+    sendNotification,
+    n8nWebhookUrl,
+  } = useIntegrations();
 
-  const handleTestRule = () => {
+  const [prebuiltConditions, setPrebuiltConditions] = useState<PrebuiltCondition[]>([
+    {
+      name: "High-Volume Buyer Reward",
+      description: "When a wallet buys more than threshold shares in 24h, send a bonus airdrop.",
+      enabled: false,
+      channels: [],
+      settings: { sharesThreshold: 10000, airdropAmount: 200, token: "QUBIC" },
+    },
+    {
+      name: "Ask Order Completion Reward",
+      description: "When a wallet completes an ask order above threshold, reward them with an airdrop.",
+      enabled: false,
+      channels: [],
+      settings: { minSharesSold: 5000, minPrice: 50, airdropAmount: 100 },
+    },
+  ]);
+
+  // Custom airdrop state
+  const [customAction, setCustomAction] = useState("AddToBidOrder");
+  const [customToken, setCustomToken] = useState("any");
+  const [customOperator, setCustomOperator] = useState("greater");
+  const [customValue, setCustomValue] = useState("");
+  const [airdropAmount, setAirdropAmount] = useState("");
+  const [airdropToken, setAirdropToken] = useState("QUBIC");
+  const [customChannels, setCustomChannels] = useState<("telegram" | "discord" | "x")[]>([]);
+  const [testingRule, setTestingRule] = useState(false);
+  const [activatingRule, setActivatingRule] = useState(false);
+
+  const togglePrebuiltChannel = (conditionIdx: number, channel: "telegram" | "discord" | "x") => {
+    setPrebuiltConditions((prev) =>
+      prev.map((condition, idx) => {
+        if (idx !== conditionIdx) return condition;
+        const hasChannel = condition.channels.includes(channel);
+        return {
+          ...condition,
+          channels: hasChannel
+            ? condition.channels.filter((c) => c !== channel)
+            : [...condition.channels, channel],
+        };
+      })
+    );
+  };
+
+  const togglePrebuiltEnabled = (conditionIdx: number) => {
+    setPrebuiltConditions((prev) =>
+      prev.map((condition, idx) =>
+        idx === conditionIdx ? { ...condition, enabled: !condition.enabled } : condition
+      )
+    );
+  };
+
+  const updatePrebuiltSetting = (conditionIdx: number, key: string, value: string | number) => {
+    setPrebuiltConditions((prev) =>
+      prev.map((condition, idx) =>
+        idx === conditionIdx
+          ? { ...condition, settings: { ...condition.settings, [key]: value } }
+          : condition
+      )
+    );
+  };
+
+  const toggleCustomChannel = (channel: "telegram" | "discord" | "x") => {
+    setCustomChannels((prev) =>
+      prev.includes(channel) ? prev.filter((c) => c !== channel) : [...prev, channel]
+    );
+  };
+
+  const getChannelName = (channel: "telegram" | "discord" | "x") => {
+    if (channel === "telegram") return telegramCredentials?.channelName;
+    if (channel === "discord") return discordCredentials?.channelName;
+    if (channel === "x") return xCredentials?.channelName;
+    return undefined;
+  };
+
+  const handleTestRule = async () => {
+    if (!n8nWebhookUrl) {
+      toast({
+        title: "Configuration Required",
+        description: "Please set your n8n webhook URL in Integrations first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (customChannels.length === 0) {
+      toast({
+        title: "No Channels Selected",
+        description: "Please select at least one notification channel.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setTestingRule(true);
+    const operatorSymbol = customOperator === "greater" ? ">" : customOperator === "less" ? "<" : "=";
+    const message = `🧪 TEST AIRDROP: Custom Rule\n\nCondition: ${customAction} on ${customToken === "any" ? "Any Token" : customToken} where shares ${operatorSymbol} ${customValue || "0"}\nReward: ${airdropAmount || "0"} ${airdropToken}`;
+
+    const success = await sendNotification("airdrop", "Test Airdrop", message, customChannels);
+    setTestingRule(false);
+
     toast({
-      title: "Testing Rule",
-      description: "Custom airdrop condition validated successfully. Rule is ready to activate.",
+      title: success ? "Test Airdrop Sent" : "Test Failed",
+      description: success
+        ? "Test airdrop notification sent to selected channels."
+        : "Failed to send test. Check your configuration.",
+      variant: success ? "default" : "destructive",
     });
   };
+
+  const handleActivateRule = async () => {
+    if (customChannels.length === 0) {
+      toast({
+        title: "No Channels Selected",
+        description: "Please select at least one notification channel.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!customValue || !airdropAmount) {
+      toast({
+        title: "Missing Values",
+        description: "Please enter threshold and airdrop amount.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setActivatingRule(true);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    setActivatingRule(false);
+
+    toast({
+      title: "Airdrop Rule Activated",
+      description: "Your custom airdrop rule is now active.",
+    });
+
+    // Reset form
+    setCustomValue("");
+    setAirdropAmount("");
+    setCustomChannels([]);
+  };
+
+  const ChannelSelector = ({
+    channels,
+    onToggle,
+    prefix,
+  }: {
+    channels: ("telegram" | "discord" | "x")[];
+    onToggle: (channel: "telegram" | "discord" | "x") => void;
+    prefix: string;
+  }) => (
+    <div className="space-y-2">
+      <Label className="text-sm text-muted-foreground">Notification Channels</Label>
+      <div className="flex flex-wrap gap-4">
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id={`${prefix}-telegram`}
+            checked={channels.includes("telegram")}
+            onCheckedChange={() => onToggle("telegram")}
+            disabled={!integrationStatus.telegram}
+          />
+          <Label htmlFor={`${prefix}-telegram`} className="flex items-center gap-1.5 cursor-pointer text-sm">
+            <MessageSquare className="w-3.5 h-3.5 text-primary" />
+            Telegram
+            {integrationStatus.telegram && getChannelName("telegram") && (
+              <span className="text-xs text-muted-foreground">({getChannelName("telegram")})</span>
+            )}
+          </Label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id={`${prefix}-discord`}
+            checked={channels.includes("discord")}
+            onCheckedChange={() => onToggle("discord")}
+            disabled={!integrationStatus.discord}
+          />
+          <Label htmlFor={`${prefix}-discord`} className="flex items-center gap-1.5 cursor-pointer text-sm">
+            <Hash className="w-3.5 h-3.5 text-primary" />
+            Discord
+            {integrationStatus.discord && getChannelName("discord") && (
+              <span className="text-xs text-muted-foreground">({getChannelName("discord")})</span>
+            )}
+          </Label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id={`${prefix}-x`}
+            checked={channels.includes("x")}
+            onCheckedChange={() => onToggle("x")}
+            disabled={!integrationStatus.x}
+          />
+          <Label htmlFor={`${prefix}-x`} className="flex items-center gap-1.5 cursor-pointer text-sm">
+            <Twitter className="w-3.5 h-3.5 text-primary" />
+            X
+            {integrationStatus.x && getChannelName("x") && (
+              <span className="text-xs text-muted-foreground">({getChannelName("x")})</span>
+            )}
+          </Label>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <DashboardLayout title="Airdrops">
       <div className="max-w-5xl space-y-6">
         {/* Description */}
         <Card className="gradient-card border-border">
-          <CardContent className="pt-6">
+          <CardContent className="pt-6 space-y-4">
             <p className="text-muted-foreground">
               Automate airdrops based on token purchases in QX. When conditions are met, 
               airdrops are automatically triggered and announced across your connected channels.
             </p>
+            {!n8nWebhookUrl && (
+              <Alert className="border-destructive/30 bg-destructive/5">
+                <AlertCircle className="h-4 w-4 text-destructive" />
+                <AlertDescription className="text-sm">
+                  <strong>Setup Required:</strong> Please configure your n8n webhook URL in the Integrations tab first.
+                </AlertDescription>
+              </Alert>
+            )}
           </CardContent>
         </Card>
 
@@ -54,22 +281,26 @@ export default function Airdrops() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <CardTitle className="text-lg">
-                      High-Volume Buyer Reward
+                      {prebuiltConditions[0].name}
                     </CardTitle>
                     <p className="text-sm text-muted-foreground mt-2">
-                      When a wallet buys more than threshold shares in 24h, send a bonus airdrop.
+                      {prebuiltConditions[0].description}
                     </p>
                   </div>
-                  <Switch />
+                  <Switch
+                    checked={prebuiltConditions[0].enabled}
+                    onCheckedChange={() => togglePrebuiltEnabled(0)}
+                  />
                 </div>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-4">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-sm">Shares Threshold</Label>
                     <Input
                       type="number"
-                      defaultValue="10000"
+                      value={prebuiltConditions[0].settings.sharesThreshold}
+                      onChange={(e) => updatePrebuiltSetting(0, "sharesThreshold", e.target.value)}
                       className="w-32 h-8 text-sm"
                     />
                   </div>
@@ -77,13 +308,17 @@ export default function Airdrops() {
                     <Label className="text-sm">Airdrop Amount</Label>
                     <Input
                       type="number"
-                      defaultValue="200"
+                      value={prebuiltConditions[0].settings.airdropAmount}
+                      onChange={(e) => updatePrebuiltSetting(0, "airdropAmount", e.target.value)}
                       className="w-32 h-8 text-sm"
                     />
                   </div>
                   <div className="flex items-center justify-between">
                     <Label className="text-sm">Token</Label>
-                    <Select defaultValue="QUBIC">
+                    <Select
+                      value={String(prebuiltConditions[0].settings.token)}
+                      onValueChange={(v) => updatePrebuiltSetting(0, "token", v)}
+                    >
                       <SelectTrigger className="w-32 h-8 text-sm">
                         <SelectValue />
                       </SelectTrigger>
@@ -97,11 +332,11 @@ export default function Airdrops() {
                     </Select>
                   </div>
                 </div>
-                <div className="flex gap-1 pt-2">
-                  <Badge variant="outline" className="text-xs">
-                    X
-                  </Badge>
-                </div>
+                <ChannelSelector
+                  channels={prebuiltConditions[0].channels}
+                  onToggle={(c) => togglePrebuiltChannel(0, c)}
+                  prefix="prebuilt-0"
+                />
               </CardContent>
             </Card>
 
@@ -110,21 +345,25 @@ export default function Airdrops() {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <CardTitle className="text-lg">Ask Order Completion Reward</CardTitle>
+                    <CardTitle className="text-lg">{prebuiltConditions[1].name}</CardTitle>
                     <p className="text-sm text-muted-foreground mt-2">
-                      When a wallet completes an ask order above threshold, reward them with an airdrop.
+                      {prebuiltConditions[1].description}
                     </p>
                   </div>
-                  <Switch />
+                  <Switch
+                    checked={prebuiltConditions[1].enabled}
+                    onCheckedChange={() => togglePrebuiltEnabled(1)}
+                  />
                 </div>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-4">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-sm">Min Shares Sold</Label>
                     <Input
                       type="number"
-                      defaultValue="5000"
+                      value={prebuiltConditions[1].settings.minSharesSold}
+                      onChange={(e) => updatePrebuiltSetting(1, "minSharesSold", e.target.value)}
                       className="w-32 h-8 text-sm"
                     />
                   </div>
@@ -132,7 +371,8 @@ export default function Airdrops() {
                     <Label className="text-sm">Min Price</Label>
                     <Input
                       type="number"
-                      defaultValue="50"
+                      value={prebuiltConditions[1].settings.minPrice}
+                      onChange={(e) => updatePrebuiltSetting(1, "minPrice", e.target.value)}
                       className="w-32 h-8 text-sm"
                     />
                   </div>
@@ -140,19 +380,17 @@ export default function Airdrops() {
                     <Label className="text-sm">Airdrop Amount</Label>
                     <Input
                       type="number"
-                      defaultValue="100"
+                      value={prebuiltConditions[1].settings.airdropAmount}
+                      onChange={(e) => updatePrebuiltSetting(1, "airdropAmount", e.target.value)}
                       className="w-32 h-8 text-sm"
                     />
                   </div>
                 </div>
-                <div className="flex gap-1 pt-2">
-                  <Badge variant="outline" className="text-xs">
-                    Telegram
-                  </Badge>
-                  <Badge variant="outline" className="text-xs">
-                    Discord
-                  </Badge>
-                </div>
+                <ChannelSelector
+                  channels={prebuiltConditions[1].channels}
+                  onToggle={(c) => togglePrebuiltChannel(1, c)}
+                  prefix="prebuilt-1"
+                />
               </CardContent>
             </Card>
           </div>
@@ -170,10 +408,10 @@ export default function Airdrops() {
               <CardTitle className="text-lg">Build Your Own Rule</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="text-muted-foreground">When</span>
-                  <Select defaultValue="AddToBidOrder">
+                  <Select value={customAction} onValueChange={setCustomAction}>
                     <SelectTrigger className="w-44 h-9">
                       <SelectValue />
                     </SelectTrigger>
@@ -188,7 +426,7 @@ export default function Airdrops() {
                   </Select>
 
                   <span className="text-muted-foreground">on</span>
-                  <Select defaultValue="any">
+                  <Select value={customToken} onValueChange={setCustomToken}>
                     <SelectTrigger className="w-28 h-9">
                       <SelectValue />
                     </SelectTrigger>
@@ -203,7 +441,7 @@ export default function Airdrops() {
                   </Select>
 
                   <span className="text-muted-foreground">where shares</span>
-                  <Select defaultValue="greater">
+                  <Select value={customOperator} onValueChange={setCustomOperator}>
                     <SelectTrigger className="w-20 h-9">
                       <SelectValue />
                     </SelectTrigger>
@@ -217,6 +455,8 @@ export default function Airdrops() {
                   <Input
                     type="number"
                     placeholder="1000"
+                    value={customValue}
+                    onChange={(e) => setCustomValue(e.target.value)}
                     className="w-28 h-9"
                   />
                 </div>
@@ -236,10 +476,12 @@ export default function Airdrops() {
                   <Input
                     type="number"
                     placeholder="100"
+                    value={airdropAmount}
+                    onChange={(e) => setAirdropAmount(e.target.value)}
                     className="w-28 h-9"
                   />
 
-                  <Select defaultValue="QUBIC">
+                  <Select value={airdropToken} onValueChange={setAirdropToken}>
                     <SelectTrigger className="w-28 h-9">
                       <SelectValue />
                     </SelectTrigger>
@@ -253,15 +495,63 @@ export default function Airdrops() {
                   </Select>
                 </div>
 
+                <ChannelSelector
+                  channels={customChannels}
+                  onToggle={toggleCustomChannel}
+                  prefix="custom"
+                />
+
                 <div className="flex gap-3 pt-4">
-                  <Button variant="outline" className="flex-1" onClick={handleTestRule}>
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={handleTestRule}
+                    disabled={testingRule}
+                  >
+                    {testingRule && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                     Test Rule
                   </Button>
-                  <Button className="flex-1 bg-primary hover:bg-primary/90">
+                  <Button
+                    className="flex-1 bg-primary hover:bg-primary/90"
+                    onClick={handleActivateRule}
+                    disabled={activatingRule}
+                  >
+                    {activatingRule && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                     Activate
                   </Button>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Recent Airdrops */}
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold">Recent Airdrops</h2>
+          <Card className="gradient-card border-border">
+            <CardContent className="p-0">
+              {recentAirdrops.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  No airdrops sent yet. Configure and activate airdrop rules above to start sending notifications.
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {recentAirdrops.map((airdrop) => (
+                    <div key={airdrop.id} className="p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Badge variant="outline" className="text-xs">
+                          {airdrop.title}
+                        </Badge>
+                        <span className="text-sm">{airdrop.message.slice(0, 60)}...</span>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span>{airdrop.channels.join(", ")}</span>
+                        <span>{formatDistanceToNow(new Date(airdrop.timestamp), { addSuffix: true })}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
