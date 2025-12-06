@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, Tag, X, Loader2 } from "lucide-react";
+import { Search, Tag, X, Loader2, ExternalLink } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
@@ -29,9 +29,11 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { shortenAddress } from "@/data/events";
 import { EventDetailDialog } from "@/components/EventDetailDialog";
+import { AdvancedWalletDialog } from "@/components/AdvancedWalletDialog";
 import { useWhaleDetection, parseAmount } from "@/hooks/useWhaleDetection";
 import { useWallets, useWalletDetails, WalletWithStats } from "@/hooks/useWallets";
 import { useEventsByWallet } from "@/hooks/useQxEvents";
+import { useAdvancedWalletDetails } from "@/hooks/useAdvancedWalletDetails";
 import { DisplayEvent } from "@/types/qxEvent";
 
 const MAX_LABELS = 5;
@@ -40,6 +42,7 @@ export default function WalletsSegments() {
   const [customLabels, setCustomLabels] = useState<Record<string, string[]>>({});
   const [selectedWallet, setSelectedWallet] = useState<WalletWithStats | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isAdvancedDialogOpen, setIsAdvancedDialogOpen] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [selectedEvent, setSelectedEvent] = useState<DisplayEvent | null>(null);
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
@@ -52,6 +55,10 @@ export default function WalletsSegments() {
   const { data: wallets = [], isLoading: walletsLoading } = useWallets();
   const { data: walletDetails, isLoading: detailsLoading } = useWalletDetails(selectedWallet?.address || null);
   const { data: walletEvents = [] } = useEventsByWallet(selectedWallet?.address || null);
+  const { data: advancedDetails, isLoading: advancedLoading } = useAdvancedWalletDetails(
+    selectedWallet?.address || null,
+    isAdvancedDialogOpen
+  );
 
   // Set first wallet as selected when data loads
   useEffect(() => {
@@ -289,10 +296,20 @@ export default function WalletsSegments() {
                       </div>
                     </div>
                   )}
-                  <Button className="w-full mt-4" onClick={() => setIsEditDialogOpen(true)}>
-                    <Tag className="w-4 h-4 mr-2" />
-                    Add / Edit Labels
-                  </Button>
+                  <div className="flex gap-2 mt-4">
+                    <Button className="flex-1" onClick={() => setIsEditDialogOpen(true)}>
+                      <Tag className="w-4 h-4 mr-2" />
+                      Labels
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="flex-1"
+                      onClick={() => setIsAdvancedDialogOpen(true)}
+                    >
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      Advanced Details
+                    </Button>
+                  </div>
                 </>
               ) : (
                 <p className="text-muted-foreground text-center py-4">Select a wallet</p>
@@ -361,6 +378,14 @@ export default function WalletsSegments() {
       </Dialog>
 
       <EventDetailDialog event={selectedEvent} open={eventDialogOpen} onOpenChange={setEventDialogOpen} />
+      
+      <AdvancedWalletDialog
+        open={isAdvancedDialogOpen}
+        onOpenChange={setIsAdvancedDialogOpen}
+        data={advancedDetails}
+        isLoading={advancedLoading}
+        address={selectedWallet?.address || ''}
+      />
     </DashboardLayout>
   );
 }
