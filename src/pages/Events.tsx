@@ -23,6 +23,7 @@ import { shortenAddress } from "@/data/events";
 import { EventDetailDialog } from "@/components/EventDetailDialog";
 import { useWhaleDetection, parseAmount } from "@/hooks/useWhaleDetection";
 import { useQxEvents } from "@/hooks/useQxEvents";
+import { useUniqueTokens } from "@/hooks/useUniqueTokens";
 import { DisplayEvent } from "@/types/qxEvent";
 
 function getEventBadgeVariant(type: string) {
@@ -61,6 +62,7 @@ export default function Events() {
   const [typeFilter, setTypeFilter] = useState("all-types");
   const [timeFilter, setTimeFilter] = useState("all");
   const { isWhale } = useWhaleDetection();
+  const uniqueTokens = useUniqueTokens();
 
   const { data: events = [], isLoading } = useQxEvents(200);
 
@@ -93,13 +95,7 @@ export default function Events() {
 
     // Token filter
     if (tokenFilter !== "all-tokens") {
-      const tokenUpper = tokenFilter.toUpperCase();
-      if (tokenFilter === "other") {
-        const knownTokens = ["QUBIC", "QMINE", "GARTH", "MATILDA", "CFB", "QXMR"];
-        if (knownTokens.includes(event.token.toUpperCase())) {
-          return false;
-        }
-      } else if (event.token.toUpperCase() !== tokenUpper) {
+      if (event.token.toUpperCase() !== tokenFilter.toUpperCase()) {
         return false;
       }
     }
@@ -163,15 +159,13 @@ export default function Events() {
               <SelectTrigger className="w-[140px] bg-background/50">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-[300px]">
                 <SelectItem value="all-tokens">All Tokens</SelectItem>
-                <SelectItem value="qubic">QUBIC</SelectItem>
-                <SelectItem value="qmine">QMINE</SelectItem>
-                <SelectItem value="garth">GARTH</SelectItem>
-                <SelectItem value="matilda">MATILDA</SelectItem>
-                <SelectItem value="cfb">CFB</SelectItem>
-                <SelectItem value="qxmr">QXMR</SelectItem>
-                <SelectItem value="other">Other tokens</SelectItem>
+                {uniqueTokens.map((token) => (
+                  <SelectItem key={token} value={token.toLowerCase()}>
+                    {token}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={typeFilter} onValueChange={setTypeFilter}>

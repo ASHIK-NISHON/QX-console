@@ -27,6 +27,7 @@ import { EventDetailDialog } from "@/components/EventDetailDialog";
 import { useWhaleDetection, parseAmount } from "@/hooks/useWhaleDetection";
 import { useQxEvents } from "@/hooks/useQxEvents";
 import { useKPIStats } from "@/hooks/useKPIStats";
+import { useUniqueTokens } from "@/hooks/useUniqueTokens";
 import { DisplayEvent } from "@/types/qxEvent";
 
 function getEventBadgeVariant(type: string) {
@@ -66,6 +67,7 @@ export default function Overview() {
   const [timeFilter, setTimeFilter] = useState("all");
   const { isWhale, whaleThresholds } = useWhaleDetection();
   const prevWhaleCountRef = useRef<number | null>(null);
+  const uniqueTokens = useUniqueTokens();
 
   const { data: events = [], isLoading: eventsLoading } = useQxEvents(50);
   const { data: kpiStats } = useKPIStats();
@@ -81,7 +83,26 @@ export default function Overview() {
     return events.filter((e) => detectWhaleInEvent(e));
   }, [events, whaleThresholds]);
 
-  const whaleEvent = whaleEvents[0] || events[0];
+  // Get the most recent whale OR highest volume event with amount >= 10000
+  const { displayWhale, isActualWhale } = useMemo(() => {
+    if (whaleEvents.length > 0) {
+      return { displayWhale: whaleEvents[0], isActualWhale: true };
+    }
+    
+    // Fallback: find highest volume event with amount >= 10000
+    const highVolumeEvents = events
+      .filter((e) => {
+        const amount = parseAmount(e.amount);
+        return amount >= 10000;
+      })
+      .sort((a, b) => parseAmount(b.amount) - parseAmount(a.amount));
+    
+    if (highVolumeEvents.length > 0) {
+      return { displayWhale: highVolumeEvents[0], isActualWhale: false };
+    }
+    
+    return { displayWhale: null, isActualWhale: false };
+  }, [events, whaleEvents]);
 
   // Show toast notification when whale events are detected
   useEffect(() => {
@@ -117,13 +138,7 @@ export default function Overview() {
 
     // Token filter
     if (tokenFilter !== "all-tokens") {
-      const tokenUpper = tokenFilter.toUpperCase();
-      if (tokenFilter === "other") {
-        const knownTokens = ["QUBIC", "QMINE", "GARTH", "MATILDA", "CFB", "QXMR"];
-        if (knownTokens.includes(event.token.toUpperCase())) {
-          return false;
-        }
-      } else if (event.token.toUpperCase() !== tokenUpper) {
+      if (event.token.toUpperCase() !== tokenFilter.toUpperCase()) {
         return false;
       }
     }
@@ -241,15 +256,13 @@ export default function Overview() {
                 <SelectTrigger className="w-[140px] bg-background/50">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px]">
                   <SelectItem value="all-tokens">All Tokens</SelectItem>
-                  <SelectItem value="qubic">QUBIC</SelectItem>
-                  <SelectItem value="qmine">QMINE</SelectItem>
-                  <SelectItem value="garth">GARTH</SelectItem>
-                  <SelectItem value="matilda">MATILDA</SelectItem>
-                  <SelectItem value="cfb">CFB</SelectItem>
-                  <SelectItem value="qxmr">QXMR</SelectItem>
-                  <SelectItem value="other">Other tokens</SelectItem>
+                  {uniqueTokens.map((token) => (
+                    <SelectItem key={token} value={token.toLowerCase()}>
+                      {token}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <Select value={typeFilter} onValueChange={setTypeFilter}>
@@ -405,38 +418,45 @@ export default function Overview() {
           </Card>
 
           {/* Recent Whale Event */}
-          {whaleEvent && (
+          {displayWhale && (
             <Card
-              onClick={() => handleEventClick(whaleEvent)}
-              className="gradient-card border-border border-primary/20 glow-primary cursor-pointer hover:border-primary/40 transition-smooth"
+              onClick={() => handleEventClick(displayWhale)}
+              className={`gradient-card border-border cursor-pointer hover:border-primary/40 transition-smooth ${
+                isActualWhale ? "border-primary/20 glow-primary" : "border-amber-500/20"
+              }`}
             >
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Fish className="w-5 h-5 text-primary" />
-                  Most Recent Whale
+                  <Fish className={`w-5 h-5 ${isActualWhale ? "text-primary" : "text-amber-500"}`} />
+                  {isActualWhale ? "Most Recent Whale" : "Highest Volume Event"}
                 </CardTitle>
+                {!isActualWhale && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    No whale detected. Showing highest volume event.
+                  </p>
+                )}
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Wallet</span>
                     <span className="font-mono text-sm text-foreground">
-                      {shortenAddress(whaleEvent.from)}
+                      {shortenAddress(displayWhale.from)}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Type</span>
-                    <Badge variant="default">{getEventTypeLabel(whaleEvent.type)}</Badge>
+                    <Badge variant="default">{getEventTypeLabel(displayWhale.type)}</Badge>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Amount</span>
                     <span className="font-mono font-semibold text-primary">
-                      {whaleEvent.amount}
+                      {displayWhale.amount}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Time</span>
-                    <span className="text-sm text-foreground">{whaleEvent.time}</span>
+                    <span className="text-sm text-foreground">{displayWhale.time}</span>
                   </div>
                 </div>
               </CardContent>

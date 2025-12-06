@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Settings as SettingsIcon, Globe, Clock, Shield, TrendingUp } from "lucide-react";
+import { Settings as SettingsIcon, Globe, Clock, Shield, TrendingUp, Plus, X } from "lucide-react";
 import { useSettings } from "@/contexts/SettingsContext";
 
 export default function Settings() {
@@ -26,11 +26,46 @@ export default function Settings() {
     return inputs;
   });
 
+  // State for adding custom token
+  const [newTokenName, setNewTokenName] = useState("");
+  const [newTokenAmount, setNewTokenAmount] = useState("");
+
   const handleThresholdChange = (token: string, value: string) => {
     setThresholdInputs((prev) => ({
       ...prev,
       [token]: value,
     }));
+  };
+
+  const handleAddCustomToken = () => {
+    const tokenName = newTokenName.trim().toUpperCase();
+    const amount = parseInt(newTokenAmount);
+
+    if (!tokenName || isNaN(amount) || amount <= 0) return;
+    
+    // Check if token already exists
+    if (whaleThresholds.some((t) => t.token.toUpperCase() === tokenName)) {
+      return;
+    }
+
+    const newThresholds = [...whaleThresholds, { token: tokenName, amount }];
+    setWhaleThresholds(newThresholds);
+    setThresholdInputs((prev) => ({
+      ...prev,
+      [tokenName]: amount.toString(),
+    }));
+    setNewTokenName("");
+    setNewTokenAmount("");
+  };
+
+  const handleRemoveToken = (tokenToRemove: string) => {
+    const newThresholds = whaleThresholds.filter((t) => t.token !== tokenToRemove);
+    setWhaleThresholds(newThresholds);
+    setThresholdInputs((prev) => {
+      const updated = { ...prev };
+      delete updated[tokenToRemove];
+      return updated;
+    });
   };
 
   const handleSaveThresholds = () => {
@@ -209,9 +244,49 @@ export default function Settings() {
                     <span className="text-sm text-muted-foreground whitespace-nowrap">
                       {threshold.token}
                     </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleRemoveToken(threshold.token)}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Add Custom Token */}
+            <div className="border-t border-border pt-4 mt-4">
+              <Label className="text-sm text-muted-foreground mb-3 block">
+                Add Custom Token Threshold
+              </Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  placeholder="Token name (e.g., NEWTOKEN)"
+                  value={newTokenName}
+                  onChange={(e) => setNewTokenName(e.target.value.toUpperCase())}
+                  className="font-mono flex-1 max-w-[160px]"
+                />
+                <Input
+                  type="number"
+                  placeholder="Threshold amount"
+                  value={newTokenAmount}
+                  onChange={(e) => setNewTokenAmount(e.target.value)}
+                  className="font-mono flex-1 max-w-[160px]"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddCustomToken}
+                  disabled={!newTokenName.trim() || !newTokenAmount}
+                  className="flex items-center gap-1"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add
+                </Button>
+              </div>
             </div>
 
             <Button 
