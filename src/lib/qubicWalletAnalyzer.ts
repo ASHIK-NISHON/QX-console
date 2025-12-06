@@ -153,11 +153,23 @@ export class QubicRpcClient {
   }
 
   async getBalance(address: string): Promise<BalanceInfo> {
-    return this.request<BalanceInfo>(`/v1/balances/${encodeURIComponent(address)}`);
+    const data = await this.request<{ balance: Record<string, unknown> }>(`/v1/balances/${encodeURIComponent(address)}`);
+    // The API returns { balance: { id, balance, ... } } - extract the inner balance object
+    const balanceObj = data.balance || {};
+    return {
+      balance: Number(balanceObj.balance ?? 0),
+      validForTick: balanceObj.validForTick as number | undefined,
+      latestIncomingTransferTick: balanceObj.latestIncomingTransferTick as number | undefined,
+      latestOutgoingTransferTick: balanceObj.latestOutgoingTransferTick as number | undefined,
+      incomingAmount: Number(balanceObj.incomingAmount ?? 0),
+      outgoingAmount: Number(balanceObj.outgoingAmount ?? 0),
+      numberOfIncomingTransfers: balanceObj.numberOfIncomingTransfers as number | undefined,
+      numberOfOutgoingTransfers: balanceObj.numberOfOutgoingTransfers as number | undefined,
+    };
   }
 
   async getLatestTick(): Promise<number> {
-    const data = await this.request<{ latestTick: number }>("/v1/latestTick");
+    const data = await this.request<{ latestTick: number }>("/v2/latestTick");
     return data.latestTick;
   }
 
@@ -243,58 +255,21 @@ export class WalletAnalyzer {
       return {};
     }
 
-    let balanceValue: number = 0;
-    let validForTick: number | undefined;
-    let latestIncomingTransferTick: number | undefined;
-    let latestOutgoingTransferTick: number | undefined;
-    let incomingAmount: number = 0;
-    let outgoingAmount: number = 0;
-    let numberOfIncomingTransfers: number = 0;
-    let numberOfOutgoingTransfers: number = 0;
-
-    if (balanceInfo.balance !== undefined && balanceInfo.balance !== null) {
-      if (typeof balanceInfo.balance === 'object') {
-        const balanceObj = balanceInfo.balance as {
-          balance?: string | number;
-          validForTick?: number;
-          latestIncomingTransferTick?: number;
-          latestOutgoingTransferTick?: number;
-          incomingAmount?: string | number;
-          outgoingAmount?: string | number;
-          numberOfIncomingTransfers?: number;
-          numberOfOutgoingTransfers?: number;
-        };
-
-        balanceValue = Number(balanceObj.balance ?? 0);
-        validForTick = balanceObj.validForTick;
-        latestIncomingTransferTick = balanceObj.latestIncomingTransferTick;
-        latestOutgoingTransferTick = balanceObj.latestOutgoingTransferTick;
-        incomingAmount = Number(balanceObj.incomingAmount ?? 0);
-        outgoingAmount = Number(balanceObj.outgoingAmount ?? 0);
-        numberOfIncomingTransfers = Number(balanceObj.numberOfIncomingTransfers ?? 0);
-        numberOfOutgoingTransfers = Number(balanceObj.numberOfOutgoingTransfers ?? 0);
-      } else {
-        balanceValue = Number(balanceInfo.balance);
-        validForTick = balanceInfo.validForTick;
-        latestIncomingTransferTick = balanceInfo.latestIncomingTransferTick;
-        latestOutgoingTransferTick = balanceInfo.latestOutgoingTransferTick;
-        incomingAmount = Number(balanceInfo.incomingAmount ?? 0);
-        outgoingAmount = Number(balanceInfo.outgoingAmount ?? 0);
-        numberOfIncomingTransfers = Number(balanceInfo.numberOfIncomingTransfers ?? 0);
-        numberOfOutgoingTransfers = Number(balanceInfo.numberOfOutgoingTransfers ?? 0);
-      }
-    }
+    // Balance is now directly a number from getBalance
+    const balanceValue = typeof balanceInfo.balance === 'number' 
+      ? balanceInfo.balance 
+      : Number(balanceInfo.balance ?? 0);
 
     return {
       balance: balanceValue,
-      valid_for_tick: validForTick,
-      latest_incoming_transfer_tick: latestIncomingTransferTick,
-      latest_outgoing_transfer_tick: latestOutgoingTransferTick,
-      incoming_amount: incomingAmount,
-      outgoing_amount: outgoingAmount,
-      number_of_incoming_transfers: numberOfIncomingTransfers,
-      number_of_outgoing_transfers: numberOfOutgoingTransfers,
-      total_transfers: numberOfIncomingTransfers + numberOfOutgoingTransfers,
+      valid_for_tick: balanceInfo.validForTick,
+      latest_incoming_transfer_tick: balanceInfo.latestIncomingTransferTick,
+      latest_outgoing_transfer_tick: balanceInfo.latestOutgoingTransferTick,
+      incoming_amount: balanceInfo.incomingAmount ?? 0,
+      outgoing_amount: balanceInfo.outgoingAmount ?? 0,
+      number_of_incoming_transfers: balanceInfo.numberOfIncomingTransfers ?? 0,
+      number_of_outgoing_transfers: balanceInfo.numberOfOutgoingTransfers ?? 0,
+      total_transfers: (balanceInfo.numberOfIncomingTransfers ?? 0) + (balanceInfo.numberOfOutgoingTransfers ?? 0),
     };
   }
 
