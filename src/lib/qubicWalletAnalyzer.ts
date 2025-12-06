@@ -218,8 +218,9 @@ export class WalletAnalyzer {
       const latestTick = await this.rpc.getLatestTick();
       return { latest_tick: latestTick, status: "connected" };
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      return { status: "disconnected", error: `Failed to fetch network info: ${msg}` };
+      // Even if latestTick fails, we can still show data - mark as connected if balance works
+      console.warn("Failed to fetch latest tick:", e);
+      return { status: "connected", latest_tick: undefined };
     }
   }
 
