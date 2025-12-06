@@ -29,6 +29,7 @@ import { useQxEvents } from "@/hooks/useQxEvents";
 import { useKPIStats } from "@/hooks/useKPIStats";
 import { useUniqueTokens } from "@/hooks/useUniqueTokens";
 import { DisplayEvent } from "@/types/qxEvent";
+import { EventsOverTimeChart } from "@/components/EventsOverTimeChart";
 
 function getEventBadgeVariant(type: string) {
   switch (type) {
@@ -367,22 +368,12 @@ export default function Overview() {
         <div className="space-y-6">
           {/* Events Chart */}
           <Card className="gradient-card border-border">
-            <CardHeader>
+            <CardHeader className="pb-2">
               <CardTitle className="text-lg">Events Over Time</CardTitle>
-              <p className="text-sm text-muted-foreground">Last 24 hours</p>
+              <p className="text-sm text-muted-foreground">Last 24 hours (2-hour intervals)</p>
             </CardHeader>
             <CardContent>
-              <div className="h-40 flex items-end justify-between gap-1">
-                {[420, 580, 390, 720, 650, 810, 590, 920, 740, 680, 850, 760].map(
-                  (height, idx) => (
-                    <div
-                      key={idx}
-                      className="flex-1 bg-gradient-to-t from-primary to-primary/30 rounded-t"
-                      style={{ height: `${(height / 1000) * 100}%` }}
-                    />
-                  )
-                )}
-              </div>
+              <EventsOverTimeChart events={events} />
             </CardContent>
           </Card>
 
