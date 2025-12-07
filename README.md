@@ -58,7 +58,7 @@ The QX Events Dashboard provides a user-friendly interface to visualize and anal
 - **Alert History** - Track all triggered alerts
 
 ### 🎁 Airdrops
-- **Airdrop Conditions** - Configure conditions based on QX activity (bids, asks, transfers)
+- **Airdrop Conditions** - Configure conditions based on QX activity (bids, asks, transfers,etc..)
 - **Multi-Platform Support** - Notify recipients via Discord, Telegram, or X
 - **Airdrop Templates** - Pre-built conditions for common scenarios
 
@@ -160,7 +160,7 @@ The edge function expects events in this flat JSON format from n8n:
 
 ### Prerequisites
 - Node.js 18+
-- Supabase account (or use the connected project)
+- Supabase account
 
 ### Local Development
 
@@ -276,7 +276,7 @@ supabase/
 
 - **No Authentication Required** - Dashboard operates as an admin-only, public-facing application
 - **RLS Policies** - Supabase tables configured for public read/write access (admin use case)
-- **Credential Storage** - Integration credentials stored in browser localStorage
+- **Credential Storage** - Integration credentials stored in browser localStorage   
 - **Credential Validation** - All credentials must pass connection tests before saving
 
 ## Contributing
