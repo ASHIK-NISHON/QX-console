@@ -241,20 +241,20 @@ export default function Overview() {
         <Card className="lg:col-span-2 gradient-card border-border">
           <CardHeader>
             <CardTitle className="text-xl">Live QX Events</CardTitle>
-            <div className="flex flex-wrap gap-3 mt-4">
-              <div className="flex-1 min-w-[200px]">
+            <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3 mt-4">
+              <div className="flex-1 min-w-0 sm:min-w-[200px]">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
                     placeholder="Search address, token, or tick no..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 bg-background/50 border-border"
+                    className="pl-10 bg-background/50 border-border text-sm"
                   />
                 </div>
               </div>
               <Select value={tokenFilter} onValueChange={setTokenFilter}>
-                <SelectTrigger className="w-[140px] bg-background/50">
+                <SelectTrigger className="w-full sm:w-[140px] bg-background/50 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="max-h-[300px]">
@@ -267,7 +267,7 @@ export default function Overview() {
                 </SelectContent>
               </Select>
               <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="w-[140px] bg-background/50">
+                <SelectTrigger className="w-full sm:w-[140px] bg-background/50 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -280,7 +280,7 @@ export default function Overview() {
                 </SelectContent>
               </Select>
               <Select value={timeFilter} onValueChange={setTimeFilter}>
-                <SelectTrigger className="w-[120px] bg-background/50">
+                <SelectTrigger className="w-full sm:w-[120px] bg-background/50 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

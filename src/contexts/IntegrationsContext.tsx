@@ -58,7 +58,13 @@ interface IntegrationsContextType {
     message: string,
     channels: ("telegram" | "discord" | "x")[]
   ) => Promise<boolean>;
+  sendTestNotification: (
+    title: string,
+    message: string,
+    channels: ("telegram" | "discord" | "x")[]
+  ) => Promise<boolean>;
   addRecentNotification: (notification: RecentNotification) => void;
+  removeRecentNotification: (type: "alert" | "airdrop", id: string) => void;
 }
 
 const IntegrationsContext = createContext<IntegrationsContextType | undefined>(undefined);
@@ -143,6 +149,18 @@ export function IntegrationsProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const removeRecentNotification = (type: "alert" | "airdrop", id: string) => {
+    if (type === "alert") {
+      const updated = recentAlerts.filter((alert) => alert.id !== id);
+      setRecentAlerts(updated);
+      localStorage.setItem("recentAlerts", JSON.stringify(updated));
+    } else {
+      const updated = recentAirdrops.filter((airdrop) => airdrop.id !== id);
+      setRecentAirdrops(updated);
+      localStorage.setItem("recentAirdrops", JSON.stringify(updated));
+    }
+  };
+
   // Test Discord by sending a test message directly to webhook
   const testDiscordConnection = async (creds: DiscordCredentials): Promise<boolean> => {
     try {
@@ -211,6 +229,69 @@ export function IntegrationsProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Send test notification directly to platforms (without n8n)
+  const sendTestNotification = async (
+    title: string,
+    message: string,
+    channels: ("telegram" | "discord" | "x")[]
+  ): Promise<boolean> => {
+    if (channels.length === 0) {
+      toast({
+        title: "No Channels Selected",
+        description: "Please select at least one notification channel.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    const results: boolean[] = [];
+
+    // Send to Discord directly
+    if (channels.includes("discord") && discordCredentials) {
+      try {
+        const response = await fetch(discordCredentials.discordWebhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: `🧪 **${title}**\n\n${message}`,
+            username: "QX Dashboard",
+          }),
+        });
+        results.push(response.ok);
+      } catch (error) {
+        console.error("Discord test notification failed:", error);
+        results.push(false);
+      }
+    }
+
+    // Send to Telegram directly
+    if (channels.includes("telegram") && telegramCredentials) {
+      try {
+        const encodedMessage = encodeURIComponent(`🧪 ${title}\n\n${message}`);
+        const url = `https://api.telegram.org/bot${telegramCredentials.telegramToken}/sendMessage?chat_id=${telegramCredentials.telegramChatId}&text=${encodedMessage}`;
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        results.push(data.ok === true);
+      } catch (error) {
+        console.error("Telegram test notification failed:", error);
+        results.push(false);
+      }
+    }
+
+    // X requires n8n, so skip it for direct testing
+    if (channels.includes("x")) {
+      toast({
+        title: "X (Twitter) Not Supported",
+        description: "X notifications require n8n webhook. Use regular send for X.",
+        variant: "default",
+      });
+    }
+
+    const success = results.length > 0 && results.every(r => r === true);
+    return success;
+  };
+
   const sendNotification = async (
     type: "alert" | "airdrop",
     title: string,
@@ -277,12 +358,24 @@ export function IntegrationsProvider({ children }: { children: ReactNode }) {
     try {
       const body = payloads.length === 1 ? payloads[0] : payloads;
       
-      await fetch(n8nWebhookUrl, {
+      const response = await fetch(n8nWebhookUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        mode: "no-cors",
         body: JSON.stringify(body),
       });
+
+      let success = response.ok;
+      if (response.ok) {
+        try {
+          const responseData = await response.json();
+          if (responseData.success !== undefined) {
+            success = responseData.success === true;
+          }
+        } catch (e) {
+          // If response is not JSON, use HTTP status
+          success = response.ok;
+        }
+      }
 
       // Add to recent notifications
       const notification: RecentNotification = {
@@ -292,11 +385,11 @@ export function IntegrationsProvider({ children }: { children: ReactNode }) {
         message,
         channels: channels.map((c) => c.charAt(0).toUpperCase() + c.slice(1)),
         timestamp: new Date().toISOString(),
-        success: true,
+        success: success,
       };
       addRecentNotification(notification);
 
-      return true;
+      return success;
     } catch (error) {
       console.error("Send notification failed:", error);
       return false;
@@ -321,7 +414,9 @@ export function IntegrationsProvider({ children }: { children: ReactNode }) {
         testDiscordConnection,
         testXConnection,
         sendNotification,
+        sendTestNotification,
         addRecentNotification,
+        removeRecentNotification,
       }}
     >
       {children}

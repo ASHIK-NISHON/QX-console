@@ -44,6 +44,7 @@ export default function WalletsSegments() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAdvancedDialogOpen, setIsAdvancedDialogOpen] = useState(false);
   const [newLabel, setNewLabel] = useState("");
+  const [editingLabel, setEditingLabel] = useState<{ address: string; index: number; value: string } | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<DisplayEvent | null>(null);
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -136,11 +137,26 @@ export default function WalletsSegments() {
     }
   };
 
-  const handleRemoveLabel = (labelToRemove: string) => {
-    if (selectedWallet) {
-      const currentLabels = getWalletLabels(selectedWallet.address);
-      handleSaveLabels(selectedWallet.address, currentLabels.filter((l) => l !== labelToRemove));
+  const handleRemoveLabel = (address: string, labelToRemove: string) => {
+    const currentLabels = getWalletLabels(address);
+    handleSaveLabels(address, currentLabels.filter((l) => l !== labelToRemove));
+    toast({ title: "Label removed" });
+  };
+
+  const handleUpdateLabel = (address: string, oldLabel: string, newLabel: string) => {
+    if (!newLabel.trim()) {
+      toast({ title: "Label cannot be empty", variant: "destructive" });
+      return;
     }
+    const currentLabels = getWalletLabels(address);
+    const updatedLabels = currentLabels.map((l) => (l === oldLabel ? newLabel.trim() : l));
+    handleSaveLabels(address, updatedLabels);
+    setEditingLabel(null);
+    toast({ title: "Label updated" });
+  };
+
+  const handleStartEdit = (address: string, index: number, currentValue: string) => {
+    setEditingLabel({ address, index, value: currentValue });
   };
 
   const handleEventClick = (event: DisplayEvent) => {
@@ -155,20 +171,20 @@ export default function WalletsSegments() {
         <Card className="lg:col-span-2 gradient-card border-border">
           <CardHeader>
             <CardTitle className="text-xl">Wallet List</CardTitle>
-            <div className="flex flex-wrap gap-3 mt-4">
-              <div className="flex-1 min-w-[200px]">
+            <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3 mt-4">
+              <div className="flex-1 min-w-0 sm:min-w-[200px]">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
                     placeholder="Search by address or tick no..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 bg-background/50 border-border"
+                    className="pl-10 bg-background/50 border-border text-sm"
                   />
                 </div>
               </div>
               <Select value={segmentFilter} onValueChange={setSegmentFilter}>
-                <SelectTrigger className="w-[140px] bg-background/50">
+                <SelectTrigger className="w-full sm:w-[140px] bg-background/50 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -179,7 +195,7 @@ export default function WalletsSegments() {
                 </SelectContent>
               </Select>
               <Select value={tickSort} onValueChange={(v) => setTickSort(v as "highest" | "lowest")}>
-                <SelectTrigger className="w-[160px] bg-background/50">
+                <SelectTrigger className="w-full sm:w-[160px] bg-background/50 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -199,42 +215,182 @@ export default function WalletsSegments() {
                 No wallets found. Waiting for data from n8n webhook...
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-border hover:bg-transparent">
-                    <TableHead>Wallet Address</TableHead>
-                    <TableHead>Label / Segment</TableHead>
-                    <TableHead>Tick No</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <>
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-border hover:bg-transparent">
+                        <TableHead>Wallet Address</TableHead>
+                        <TableHead>Label / Segment</TableHead>
+                        <TableHead>Tick No</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredWallets.map((wallet) => (
+                        <TableRow
+                          key={wallet.address}
+                          className={`border-border hover:bg-background/30 transition-smooth cursor-pointer ${
+                            selectedWallet?.address === wallet.address ? "bg-primary/10" : ""
+                          }`}
+                          onClick={() => setSelectedWallet(wallet)}
+                        >
+                          <TableCell className="font-mono font-semibold">
+                            {shortenAddress(wallet.address)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1 flex-wrap">
+                              {getWalletLabels(wallet.address).map((label, i) => (
+                                <Badge 
+                                  key={i} 
+                                  variant="outline" 
+                                  className="border-primary/30 text-primary pr-1 group"
+                                >
+                                  {editingLabel?.address === wallet.address && editingLabel?.index === i ? (
+                                    <Input
+                                      value={editingLabel.value}
+                                      onChange={(e) => setEditingLabel({ ...editingLabel, value: e.target.value })}
+                                      onBlur={() => {
+                                        if (editingLabel.value !== label) {
+                                          handleUpdateLabel(wallet.address, label, editingLabel.value);
+                                        } else {
+                                          setEditingLabel(null);
+                                        }
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          if (editingLabel.value !== label) {
+                                            handleUpdateLabel(wallet.address, label, editingLabel.value);
+                                          } else {
+                                            setEditingLabel(null);
+                                          }
+                                        } else if (e.key === "Escape") {
+                                          setEditingLabel(null);
+                                        }
+                                      }}
+                                      className="h-5 w-20 text-xs border-0 p-0 bg-transparent focus-visible:ring-0"
+                                      autoFocus
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  ) : (
+                                    <>
+                                      <span 
+                                        className="cursor-pointer hover:underline"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleStartEdit(wallet.address, i, label);
+                                        }}
+                                      >
+                                        {label}
+                                      </span>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleRemoveLabel(wallet.address, label);
+                                        }}
+                                        className="ml-1 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </>
+                                  )}
+                                </Badge>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="font-mono text-sm">{wallet.latestTickNo.toLocaleString()}</span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-3">
                   {filteredWallets.map((wallet) => (
-                    <TableRow
+                    <div
                       key={wallet.address}
-                      className={`border-border hover:bg-background/30 transition-smooth cursor-pointer ${
-                        selectedWallet?.address === wallet.address ? "bg-primary/10" : ""
-                      }`}
                       onClick={() => setSelectedWallet(wallet)}
+                      className={`p-4 rounded-lg border border-border hover:border-primary/30 transition-smooth cursor-pointer ${
+                        selectedWallet?.address === wallet.address ? "bg-primary/10 border-primary/30" : "bg-background/30"
+                      }`}
                     >
-                      <TableCell className="font-mono font-semibold">
-                        {shortenAddress(wallet.address)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1 flex-wrap">
-                          {getWalletLabels(wallet.address).map((label, i) => (
-                            <Badge key={i} variant="outline" className="border-primary/30 text-primary">
-                              {label}
-                            </Badge>
-                          ))}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono font-semibold text-sm text-foreground">
+                            {shortenAddress(wallet.address)}
+                          </span>
+                          <span className="font-mono text-xs text-muted-foreground">
+                            Tick: {wallet.latestTickNo.toLocaleString()}
+                          </span>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-mono text-sm">{wallet.latestTickNo.toLocaleString()}</span>
-                      </TableCell>
-                    </TableRow>
+                        {getWalletLabels(wallet.address).length > 0 && (
+                          <div className="flex gap-1 flex-wrap">
+                            {getWalletLabels(wallet.address).map((label, i) => (
+                              <Badge 
+                                key={i} 
+                                variant="outline" 
+                                className="border-primary/30 text-primary text-xs pr-1 group"
+                              >
+                                {editingLabel?.address === wallet.address && editingLabel?.index === i ? (
+                                  <Input
+                                    value={editingLabel.value}
+                                    onChange={(e) => setEditingLabel({ ...editingLabel, value: e.target.value })}
+                                    onBlur={() => {
+                                      if (editingLabel.value !== label) {
+                                        handleUpdateLabel(wallet.address, label, editingLabel.value);
+                                      } else {
+                                        setEditingLabel(null);
+                                      }
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        if (editingLabel.value !== label) {
+                                          handleUpdateLabel(wallet.address, label, editingLabel.value);
+                                        } else {
+                                          setEditingLabel(null);
+                                        }
+                                      } else if (e.key === "Escape") {
+                                        setEditingLabel(null);
+                                      }
+                                    }}
+                                    className="h-4 w-16 text-xs border-0 p-0 bg-transparent focus-visible:ring-0"
+                                    autoFocus
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                ) : (
+                                  <>
+                                    <span 
+                                      className="cursor-pointer hover:underline"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleStartEdit(wallet.address, i, label);
+                                      }}
+                                    >
+                                      {label}
+                                    </span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRemoveLabel(wallet.address, label);
+                                      }}
+                                      className="ml-1 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                      <X className="w-2.5 h-2.5" />
+                                    </button>
+                                  </>
+                                )}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   ))}
-                </TableBody>
-              </Table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
@@ -258,8 +414,52 @@ export default function WalletsSegments() {
                     <p className="text-sm text-muted-foreground mb-2">Labels</p>
                     <div className="flex gap-1 flex-wrap">
                       {getWalletLabels(selectedWallet.address).map((label, i) => (
-                        <Badge key={i} variant="outline" className="border-primary/30 text-primary">
-                          {label}
+                        <Badge 
+                          key={i} 
+                          variant="outline" 
+                          className="border-primary/30 text-primary pr-1 group"
+                        >
+                          {editingLabel?.address === selectedWallet.address && editingLabel?.index === i ? (
+                            <Input
+                              value={editingLabel.value}
+                              onChange={(e) => setEditingLabel({ ...editingLabel, value: e.target.value })}
+                              onBlur={() => {
+                                if (editingLabel.value !== label) {
+                                  handleUpdateLabel(selectedWallet.address, label, editingLabel.value);
+                                } else {
+                                  setEditingLabel(null);
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  if (editingLabel.value !== label) {
+                                    handleUpdateLabel(selectedWallet.address, label, editingLabel.value);
+                                  } else {
+                                    setEditingLabel(null);
+                                  }
+                                } else if (e.key === "Escape") {
+                                  setEditingLabel(null);
+                                }
+                              }}
+                              className="h-5 w-20 text-xs border-0 p-0 bg-transparent focus-visible:ring-0"
+                              autoFocus
+                            />
+                          ) : (
+                            <>
+                              <span 
+                                className="cursor-pointer hover:underline"
+                                onClick={() => handleStartEdit(selectedWallet.address, i, label)}
+                              >
+                                {label}
+                              </span>
+                              <button
+                                onClick={() => handleRemoveLabel(selectedWallet.address, label)}
+                                className="ml-1 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </>
+                          )}
                         </Badge>
                       ))}
                       {getWalletLabels(selectedWallet.address).length === 0 && (
@@ -356,11 +556,48 @@ export default function WalletsSegments() {
           <div className="space-y-4 py-4">
             <div className="flex flex-wrap gap-2">
               {selectedWallet && getWalletLabels(selectedWallet.address).map((label, i) => (
-                <Badge key={i} variant="outline" className="border-primary/30 text-primary pr-1">
-                  {label}
-                  <button onClick={() => handleRemoveLabel(label)} className="ml-1 hover:text-destructive">
-                    <X className="w-3 h-3" />
-                  </button>
+                <Badge key={i} variant="outline" className="border-primary/30 text-primary pr-1 group">
+                  {editingLabel?.address === selectedWallet.address && editingLabel?.index === i ? (
+                    <Input
+                      value={editingLabel.value}
+                      onChange={(e) => setEditingLabel({ ...editingLabel, value: e.target.value })}
+                      onBlur={() => {
+                        if (editingLabel.value !== label) {
+                          handleUpdateLabel(selectedWallet.address, label, editingLabel.value);
+                        } else {
+                          setEditingLabel(null);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          if (editingLabel.value !== label) {
+                            handleUpdateLabel(selectedWallet.address, label, editingLabel.value);
+                          } else {
+                            setEditingLabel(null);
+                          }
+                        } else if (e.key === "Escape") {
+                          setEditingLabel(null);
+                        }
+                      }}
+                      className="h-5 w-20 text-xs border-0 p-0 bg-transparent focus-visible:ring-0"
+                      autoFocus
+                    />
+                  ) : (
+                    <>
+                      <span 
+                        className="cursor-pointer hover:underline"
+                        onClick={() => handleStartEdit(selectedWallet.address, i, label)}
+                      >
+                        {label}
+                      </span>
+                      <button 
+                        onClick={() => handleRemoveLabel(selectedWallet.address, label)} 
+                        className="ml-1 hover:text-destructive"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </>
+                  )}
                 </Badge>
               ))}
             </div>

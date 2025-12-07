@@ -143,20 +143,20 @@ export default function Events() {
       <Card className="gradient-card border-border">
         <CardHeader>
           <CardTitle className="text-xl">QX Events History</CardTitle>
-          <div className="flex flex-wrap gap-3 mt-4">
-            <div className="flex-1 min-w-[200px]">
+          <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3 mt-4">
+            <div className="flex-1 min-w-0 sm:min-w-[200px]">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   placeholder="Search address, token, or tick no..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-background/50 border-border"
+                  className="pl-10 bg-background/50 border-border text-sm"
                 />
               </div>
             </div>
             <Select value={tokenFilter} onValueChange={setTokenFilter}>
-              <SelectTrigger className="w-[140px] bg-background/50">
+              <SelectTrigger className="w-full sm:w-[140px] bg-background/50 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="max-h-[300px]">
@@ -169,7 +169,7 @@ export default function Events() {
               </SelectContent>
             </Select>
             <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-[140px] bg-background/50">
+              <SelectTrigger className="w-full sm:w-[140px] bg-background/50 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -184,7 +184,7 @@ export default function Events() {
               </SelectContent>
             </Select>
             <Select value={timeFilter} onValueChange={setTimeFilter}>
-              <SelectTrigger className="w-[120px] bg-background/50">
+              <SelectTrigger className="w-full sm:w-[120px] bg-background/50 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -207,79 +207,142 @@ export default function Events() {
               No events found. Waiting for data from n8n webhook...
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="border-border hover:bg-transparent">
-                  <TableHead>Type</TableHead>
-                  <TableHead>Token</TableHead>
-                  <TableHead>From</TableHead>
-                  <TableHead>To</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Timestamp</TableHead>
-                  <TableHead>Label</TableHead>
-                  <TableHead>Tick no</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-border hover:bg-transparent">
+                      <TableHead>Type</TableHead>
+                      <TableHead>Token</TableHead>
+                      <TableHead>From</TableHead>
+                      <TableHead>To</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Timestamp</TableHead>
+                      <TableHead>Label</TableHead>
+                      <TableHead>Tick no</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredEvents.map((event) => (
+                      <TableRow
+                        key={event.id}
+                        className="border-border hover:bg-background/30 transition-smooth cursor-pointer"
+                        onClick={() => handleEventClick(event)}
+                      >
+                        <TableCell>
+                          <Badge variant={getEventBadgeVariant(event.type)}>
+                            {getEventTypeLabel(event.type)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">
+                          {event.token}
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">
+                          {shortenAddress(event.from)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {event.type === "AddToBidOrder" ? (
+                              <ArrowUpRight className="w-4 h-4 text-success" />
+                            ) : (
+                              <ArrowDownRight className="w-4 h-4 text-muted-foreground" />
+                            )}
+                            <span className="font-mono text-sm">{shortenAddress(event.to)}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-mono font-semibold">
+                          {event.amount}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          <div className="flex flex-col">
+                            <span className="text-muted-foreground">{event.time}</span>
+                            <span className="text-xs text-muted-foreground/60">
+                              {event.timestamp}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {detectWhaleInEvent(event) ? (
+                            <Badge
+                              variant="outline"
+                              className="text-xs border-amber-500/50 text-amber-500 bg-amber-500/10"
+                            >
+                              🐋 Whale
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-mono text-xs text-foreground">
+                            {event.tickNo}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Mobile Card View */}
+              <div className="md:hidden space-y-3">
                 {filteredEvents.map((event) => (
-                  <TableRow
+                  <div
                     key={event.id}
-                    className="border-border hover:bg-background/30 transition-smooth cursor-pointer"
                     onClick={() => handleEventClick(event)}
+                    className="p-4 rounded-lg bg-background/30 border border-border hover:border-primary/30 transition-smooth cursor-pointer space-y-3"
                   >
-                    <TableCell>
-                      <Badge variant={getEventBadgeVariant(event.type)}>
-                        {getEventTypeLabel(event.type)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">
-                      {event.token}
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">
-                      {shortenAddress(event.from)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {event.type === "AddToBidOrder" ? (
-                          <ArrowUpRight className="w-4 h-4 text-success" />
-                        ) : (
-                          <ArrowDownRight className="w-4 h-4 text-muted-foreground" />
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant={getEventBadgeVariant(event.type)} className="text-xs">
+                          {getEventTypeLabel(event.type)}
+                        </Badge>
+                        {detectWhaleInEvent(event) && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs border-amber-500/50 text-amber-500 bg-amber-500/10"
+                          >
+                            🐋 Whale
+                          </Badge>
                         )}
-                        <span className="font-mono text-sm">{shortenAddress(event.to)}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono font-semibold">
-                      {event.amount}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      <div className="flex flex-col">
-                        <span className="text-muted-foreground">{event.time}</span>
-                        <span className="text-xs text-muted-foreground/60">
-                          {event.timestamp}
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {event.token}
                         </span>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      {detectWhaleInEvent(event) ? (
-                        <Badge
-                          variant="outline"
-                          className="text-xs border-amber-500/50 text-amber-500 bg-amber-500/10"
-                        >
-                          🐋 Whale
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
                       <span className="font-mono text-xs text-foreground">
                         {event.tickNo}
                       </span>
-                    </TableCell>
-                  </TableRow>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">From:</span>
+                        <span className="font-mono text-foreground">{shortenAddress(event.from)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">To:</span>
+                        <div className="flex items-center gap-1">
+                          {event.type === "AddToBidOrder" ? (
+                            <ArrowUpRight className="w-3 h-3 text-success" />
+                          ) : (
+                            <ArrowDownRight className="w-3 h-3 text-muted-foreground" />
+                          )}
+                          <span className="font-mono text-foreground">{shortenAddress(event.to)}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Amount:</span>
+                        <span className="font-mono font-semibold text-foreground">{event.amount}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Time:</span>
+                        <span className="text-foreground">{event.time}</span>
+                      </div>
+                    </div>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

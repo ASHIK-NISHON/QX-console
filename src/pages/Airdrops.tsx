@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sparkles, Settings2, MessageSquare, Hash, Twitter, AlertCircle, Loader2 } from "lucide-react";
+import { Sparkles, Settings2, MessageSquare, Hash, Twitter, AlertCircle, Loader2, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useUniqueTokens } from "@/hooks/useUniqueTokens";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
@@ -39,25 +39,33 @@ export default function Airdrops() {
     xCredentials,
     recentAirdrops,
     sendNotification,
+    sendTestNotification,
+    removeRecentNotification,
     n8nWebhookUrl,
   } = useIntegrations();
 
-  const [prebuiltConditions, setPrebuiltConditions] = useState<PrebuiltCondition[]>([
-    {
-      name: "High-Volume Buyer Reward",
-      description: "When a wallet buys more than threshold shares in 24h, send a bonus airdrop.",
-      enabled: false,
-      channels: [],
-      settings: { sharesThreshold: 10000, airdropAmount: 200, token: "QUBIC" },
-    },
-    {
-      name: "Ask Order Completion Reward",
-      description: "When a wallet completes an ask order above threshold, reward them with an airdrop.",
-      enabled: false,
-      channels: [],
-      settings: { minSharesSold: 5000, minPrice: 50, airdropAmount: 100 },
-    },
-  ]);
+  const [prebuiltConditions, setPrebuiltConditions] = useState<PrebuiltCondition[]>(() => {
+    const stored = localStorage.getItem("airdropConditions");
+    if (stored) {
+      return JSON.parse(stored);
+    }
+    return [
+      {
+        name: "High-Volume Buyer Reward",
+        description: "When a wallet buys more than threshold shares in 24h, send a bonus airdrop.",
+        enabled: false,
+        channels: [],
+        settings: { sharesThreshold: 10000, airdropAmount: 200, token: "QUBIC" },
+      },
+      {
+        name: "Ask Order Completion Reward",
+        description: "When a wallet completes an ask order above threshold, reward them with an airdrop.",
+        enabled: false,
+        channels: [],
+        settings: { minSharesSold: 5000, minPrice: 50, airdropAmount: 100 },
+      },
+    ];
+  });
 
   // Custom airdrop state
   const [customAction, setCustomAction] = useState("AddToBidOrder");
@@ -71,8 +79,8 @@ export default function Airdrops() {
   const [activatingRule, setActivatingRule] = useState(false);
 
   const togglePrebuiltChannel = (conditionIdx: number, channel: "telegram" | "discord" | "x") => {
-    setPrebuiltConditions((prev) =>
-      prev.map((condition, idx) => {
+    setPrebuiltConditions((prev) => {
+      const updated = prev.map((condition, idx) => {
         if (idx !== conditionIdx) return condition;
         const hasChannel = condition.channels.includes(channel);
         return {
@@ -81,26 +89,44 @@ export default function Airdrops() {
             ? condition.channels.filter((c) => c !== channel)
             : [...condition.channels, channel],
         };
-      })
-    );
+      });
+      localStorage.setItem("airdropConditions", JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const togglePrebuiltEnabled = (conditionIdx: number) => {
-    setPrebuiltConditions((prev) =>
-      prev.map((condition, idx) =>
+    setPrebuiltConditions((prev) => {
+      const updated = prev.map((condition, idx) =>
         idx === conditionIdx ? { ...condition, enabled: !condition.enabled } : condition
-      )
-    );
+      );
+      localStorage.setItem("airdropConditions", JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const updatePrebuiltSetting = (conditionIdx: number, key: string, value: string | number) => {
-    setPrebuiltConditions((prev) =>
-      prev.map((condition, idx) =>
+    setPrebuiltConditions((prev) => {
+      const updated = prev.map((condition, idx) =>
         idx === conditionIdx
           ? { ...condition, settings: { ...condition.settings, [key]: value } }
           : condition
-      )
-    );
+      );
+      localStorage.setItem("airdropConditions", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const removeAirdropCondition = (conditionIdx: number) => {
+    setPrebuiltConditions((prev) => {
+      const updated = prev.filter((_, idx) => idx !== conditionIdx);
+      localStorage.setItem("airdropConditions", JSON.stringify(updated));
+      toast({
+        title: "Airdrop Removed",
+        description: "Airdrop condition has been removed.",
+      });
+      return updated;
+    });
   };
 
   const toggleCustomChannel = (channel: "telegram" | "discord" | "x") => {
@@ -117,15 +143,6 @@ export default function Airdrops() {
   };
 
   const handleTestRule = async () => {
-    if (!n8nWebhookUrl) {
-      toast({
-        title: "Configuration Required",
-        description: "Please set your n8n webhook URL in Integrations first.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     if (customChannels.length === 0) {
       toast({
         title: "No Channels Selected",
@@ -139,7 +156,7 @@ export default function Airdrops() {
     const operatorSymbol = customOperator === "greater" ? ">" : customOperator === "less" ? "<" : "=";
     const message = `🧪 TEST AIRDROP: Custom Rule\n\nCondition: ${customAction} on ${customToken === "any" ? "Any Token" : customToken} where shares ${operatorSymbol} ${customValue || "0"}\nReward: ${airdropAmount || "0"} ${airdropToken}`;
 
-    const success = await sendNotification("airdrop", "Test Airdrop", message, customChannels);
+    const success = await sendTestNotification("Test Airdrop", message, customChannels);
     setTestingRule(false);
 
     toast({
@@ -171,7 +188,32 @@ export default function Airdrops() {
     }
 
     setActivatingRule(true);
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    
+    const operatorSymbol = customOperator === "greater" ? ">" : customOperator === "less" ? "<" : "=";
+    const conditionName = `Custom: ${customAction} on ${customToken === "any" ? "Any Token" : customToken} where shares ${operatorSymbol} ${customValue}`;
+    
+    // Add custom airdrop to conditions
+    const newCondition: PrebuiltCondition = {
+      name: conditionName,
+      description: `Airdrop ${airdropAmount} ${airdropToken} when condition is met`,
+      enabled: true,
+      channels: customChannels,
+      settings: {
+        action: customAction,
+        token: customToken,
+        operator: customOperator,
+        value: customValue,
+        airdropAmount: airdropAmount,
+        airdropToken: airdropToken,
+      },
+    };
+    
+    setPrebuiltConditions((prev) => {
+      const updated = [newCondition, ...prev];
+      localStorage.setItem("airdropConditions", JSON.stringify(updated));
+      return updated;
+    });
+    
     setActivatingRule(false);
 
     toast({
@@ -180,8 +222,12 @@ export default function Airdrops() {
     });
 
     // Reset form
+    setCustomAction("AddToBidOrder");
+    setCustomToken("any");
+    setCustomOperator("greater");
     setCustomValue("");
     setAirdropAmount("");
+    setAirdropToken("QUBIC");
     setCustomChannels([]);
   };
 
@@ -274,7 +320,7 @@ export default function Airdrops() {
             Prebuilt Airdrop Conditions
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* High-Volume Buyer Reward */}
             <Card className="gradient-card border-border hover:border-primary/30 transition-smooth">
               <CardHeader>
@@ -287,10 +333,20 @@ export default function Airdrops() {
                       {prebuiltConditions[0].description}
                     </p>
                   </div>
-                  <Switch
-                    checked={prebuiltConditions[0].enabled}
-                    onCheckedChange={() => togglePrebuiltEnabled(0)}
-                  />
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={prebuiltConditions[0].enabled}
+                      onCheckedChange={() => togglePrebuiltEnabled(0)}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeAirdropCondition(0)}
+                      className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -343,17 +399,27 @@ export default function Airdrops() {
             {/* Ask Order Completion Reward */}
             <Card className="gradient-card border-border hover:border-primary/30 transition-smooth">
               <CardHeader>
-                <div className="flex items-start justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                   <div className="flex-1">
-                    <CardTitle className="text-lg">{prebuiltConditions[1].name}</CardTitle>
-                    <p className="text-sm text-muted-foreground mt-2">
+                    <CardTitle className="text-base sm:text-lg">{prebuiltConditions[1].name}</CardTitle>
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-2">
                       {prebuiltConditions[1].description}
                     </p>
                   </div>
-                  <Switch
-                    checked={prebuiltConditions[1].enabled}
-                    onCheckedChange={() => togglePrebuiltEnabled(1)}
-                  />
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={prebuiltConditions[1].enabled}
+                      onCheckedChange={() => togglePrebuiltEnabled(1)}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeAirdropCondition(1)}
+                      className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -409,10 +475,10 @@ export default function Airdrops() {
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
-                <div className="flex flex-wrap items-center gap-2 text-sm">
+                <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-2 sm:gap-3 text-sm">
                   <span className="text-muted-foreground">When</span>
                   <Select value={customAction} onValueChange={setCustomAction}>
-                    <SelectTrigger className="w-44 h-9">
+                    <SelectTrigger className="w-full sm:w-44 h-9 text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -427,7 +493,7 @@ export default function Airdrops() {
 
                   <span className="text-muted-foreground">on</span>
                   <Select value={customToken} onValueChange={setCustomToken}>
-                    <SelectTrigger className="w-28 h-9">
+                    <SelectTrigger className="w-full sm:w-28 h-9 text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -442,7 +508,7 @@ export default function Airdrops() {
 
                   <span className="text-muted-foreground">where shares</span>
                   <Select value={customOperator} onValueChange={setCustomOperator}>
-                    <SelectTrigger className="w-20 h-9">
+                    <SelectTrigger className="w-full sm:w-20 h-9 text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -457,14 +523,14 @@ export default function Airdrops() {
                     placeholder="1000"
                     value={customValue}
                     onChange={(e) => setCustomValue(e.target.value)}
-                    className="w-28 h-9"
+                    className="w-full sm:w-28 h-9 text-sm"
                   />
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 text-sm">
+                <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-2 sm:gap-3 text-sm">
                   <span className="text-muted-foreground">then</span>
                   <Select defaultValue="airdrop">
-                    <SelectTrigger className="w-36 h-9">
+                    <SelectTrigger className="w-full sm:w-36 h-9 text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -478,11 +544,11 @@ export default function Airdrops() {
                     placeholder="100"
                     value={airdropAmount}
                     onChange={(e) => setAirdropAmount(e.target.value)}
-                    className="w-28 h-9"
+                    className="w-full sm:w-28 h-9 text-sm"
                   />
 
                   <Select value={airdropToken} onValueChange={setAirdropToken}>
-                    <SelectTrigger className="w-28 h-9">
+                    <SelectTrigger className="w-full sm:w-28 h-9 text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -544,9 +610,19 @@ export default function Airdrops() {
                         </Badge>
                         <span className="text-sm">{airdrop.message.slice(0, 60)}...</span>
                       </div>
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        <span>{airdrop.channels.join(", ")}</span>
-                        <span>{formatDistanceToNow(new Date(airdrop.timestamp), { addSuffix: true })}</span>
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                          <span>{airdrop.channels.join(", ")}</span>
+                          <span>{formatDistanceToNow(new Date(airdrop.timestamp), { addSuffix: true })}</span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeRecentNotification("airdrop", airdrop.id)}
+                          className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                   ))}

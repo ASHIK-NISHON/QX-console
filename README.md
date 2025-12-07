@@ -225,7 +225,7 @@ The dashboard fetches additional wallet details from the Qubic RPC API:
 - **Balance Endpoint**: `POST /v1/balances`
 - **Latest Tick**: `GET /v1/latestTick`
 
-Implementation reference: [wallet-analyzer](https://github.com/ASHIK-NISHON/wallet-analyzer)
+Implementation reference: [wallet-analyzer](https://github.com/ASHIK-NISHON/qubic-console-0886d1bf.git)
 
 ## Project Structure
 
@@ -292,5 +292,3 @@ supabase/
 MIT License - See LICENSE file for details.
 
 ---
-
-Built with ❤️ for the Qubic ecosystem

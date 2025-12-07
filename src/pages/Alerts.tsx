@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Bell, MessageSquare, Hash, Twitter, AlertCircle, Plus, Loader2 } from "lucide-react";
+import { Bell, MessageSquare, Hash, Twitter, AlertCircle, Plus, Loader2, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useUniqueTokens } from "@/hooks/useUniqueTokens";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
@@ -34,25 +34,33 @@ export default function Alerts() {
     xCredentials,
     recentAlerts,
     sendNotification,
+    sendTestNotification,
+    removeRecentNotification,
     n8nWebhookUrl,
   } = useIntegrations();
 
-  const [alertTemplates, setAlertTemplates] = useState<AlertTemplate[]>([
-    {
-      name: "Whale Buy Alert",
-      description: "Trigger when a whale wallet adds a bid order with shares above threshold",
-      condition: "AddToBidOrder > 10,000 shares from whale wallet",
-      enabled: false,
-      channels: [],
-    },
-    {
-      name: "Whale Sell Alert",
-      description: "Trigger when a whale wallet adds an ask order with shares above threshold",
-      condition: "AddToAskOrder > 5,000 shares from whale wallet",
-      enabled: false,
-      channels: [],
-    },
-  ]);
+  const [alertTemplates, setAlertTemplates] = useState<AlertTemplate[]>(() => {
+    const stored = localStorage.getItem("alertTemplates");
+    if (stored) {
+      return JSON.parse(stored);
+    }
+    return [
+      {
+        name: "Whale Buy Alert",
+        description: "Trigger when a whale wallet adds a bid order with shares above threshold",
+        condition: "AddToBidOrder > 10,000 shares from whale wallet",
+        enabled: false,
+        channels: [],
+      },
+      {
+        name: "Whale Sell Alert",
+        description: "Trigger when a whale wallet adds an ask order with shares above threshold",
+        condition: "AddToAskOrder > 5,000 shares from whale wallet",
+        enabled: false,
+        channels: [],
+      },
+    ];
+  });
 
   // Custom alert state
   const [customAlertName, setCustomAlertName] = useState("");
@@ -67,8 +75,8 @@ export default function Alerts() {
   const [activatingAlert, setActivatingAlert] = useState(false);
 
   const toggleTemplateChannel = (templateIdx: number, channel: "telegram" | "discord" | "x") => {
-    setAlertTemplates((prev) =>
-      prev.map((template, idx) => {
+    setAlertTemplates((prev) => {
+      const updated = prev.map((template, idx) => {
         if (idx !== templateIdx) return template;
         const hasChannel = template.channels.includes(channel);
         return {
@@ -77,16 +85,32 @@ export default function Alerts() {
             ? template.channels.filter((c) => c !== channel)
             : [...template.channels, channel],
         };
-      })
-    );
+      });
+      localStorage.setItem("alertTemplates", JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const toggleTemplateEnabled = (templateIdx: number) => {
-    setAlertTemplates((prev) =>
-      prev.map((template, idx) =>
+    setAlertTemplates((prev) => {
+      const updated = prev.map((template, idx) =>
         idx === templateIdx ? { ...template, enabled: !template.enabled } : template
-      )
-    );
+      );
+      localStorage.setItem("alertTemplates", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const removeAlertTemplate = (templateIdx: number) => {
+    setAlertTemplates((prev) => {
+      const updated = prev.filter((_, idx) => idx !== templateIdx);
+      localStorage.setItem("alertTemplates", JSON.stringify(updated));
+      toast({
+        title: "Alert Removed",
+        description: "Alert template has been removed.",
+      });
+      return updated;
+    });
   };
 
   const toggleCustomChannel = (channel: "telegram" | "discord" | "x") => {
@@ -96,15 +120,6 @@ export default function Alerts() {
   };
 
   const handleTestAlert = async () => {
-    if (!n8nWebhookUrl) {
-      toast({
-        title: "Configuration Required",
-        description: "Please set your n8n webhook URL in Integrations first.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     if (customChannels.length === 0) {
       toast({
         title: "No Channels Selected",
@@ -118,7 +133,7 @@ export default function Alerts() {
     const operatorSymbol = customOperator === "greater" ? ">" : customOperator === "less" ? "<" : "=";
     const message = `🧪 TEST ALERT: ${customAlertName || "Custom Alert"}\n\nCondition: ${customAction} on ${customToken === "any" ? "Any Token" : customToken} where ${customField} ${operatorSymbol} ${customValue || "0"}`;
 
-    const success = await sendNotification("alert", customAlertName || "Test Alert", message, customChannels);
+    const success = await sendTestNotification(customAlertName || "Test Alert", message, customChannels);
     setTestingAlert(false);
 
     toast({
@@ -150,8 +165,25 @@ export default function Alerts() {
     }
 
     setActivatingAlert(true);
-    // In a real implementation, this would save the alert rule to the database
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    
+    const operatorSymbol = customOperator === "greater" ? ">" : customOperator === "less" ? "<" : "=";
+    const condition = `${customAction} on ${customToken === "any" ? "Any Token" : customToken} where ${customField} ${operatorSymbol} ${customValue || "0"}`;
+    
+    // Add custom alert to templates
+    const newAlert: AlertTemplate = {
+      name: customAlertName,
+      description: customAlertDescription || `Custom alert: ${condition}`,
+      condition: condition,
+      enabled: true,
+      channels: customChannels,
+    };
+    
+    setAlertTemplates((prev) => {
+      const updated = [newAlert, ...prev];
+      localStorage.setItem("alertTemplates", JSON.stringify(updated));
+      return updated;
+    });
+    
     setActivatingAlert(false);
 
     toast({
@@ -187,8 +219,8 @@ export default function Alerts() {
             <Alert className="border-primary/30 bg-primary/5">
               <AlertCircle className="h-4 w-4 text-primary" />
               <AlertDescription className="text-sm">
-                <strong>Whale Detection:</strong> This app identifies whale users based on wallet balance exceeding 1,000,000 QX tokens. 
-                You can edit this threshold in the Settings → Data Parameters tab.
+                <strong>Whale Detection:</strong> This app identifies whale transactions based on transaction amounts exceeding configured thresholds per token (e.g., 1,000,000 for QUBIC, 500,000 for QMINE). 
+                You can edit these thresholds in the Settings → Whale Detection Thresholds tab.
               </AlertDescription>
             </Alert>
             {!n8nWebhookUrl && (
@@ -215,22 +247,32 @@ export default function Alerts() {
                 key={idx}
                 className="gradient-card border-border hover:border-primary/30 transition-smooth"
               >
-                <CardContent className="p-6">
-                  <div className="flex items-start gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h3 className="font-semibold text-lg">
+                <CardContent className="p-4 sm:p-6">
+                  <div className="flex flex-col sm:flex-row items-start gap-4">
+                    <div className="flex-1 w-full">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-base sm:text-lg">
                             {template.name}
                           </h3>
-                          <p className="text-sm text-muted-foreground mt-1">
+                          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                             {template.description}
                           </p>
                         </div>
-                        <Switch
-                          checked={template.enabled}
-                          onCheckedChange={() => toggleTemplateEnabled(idx)}
-                        />
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={template.enabled}
+                            onCheckedChange={() => toggleTemplateEnabled(idx)}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeAlertTemplate(idx)}
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
 
                       <div className="mt-4 space-y-4">
@@ -577,9 +619,19 @@ export default function Alerts() {
                         </Badge>
                         <span className="text-sm">{alert.message.slice(0, 60)}...</span>
                       </div>
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        <span>{alert.channels.join(", ")}</span>
-                        <span>{formatDistanceToNow(new Date(alert.timestamp), { addSuffix: true })}</span>
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                          <span>{alert.channels.join(", ")}</span>
+                          <span>{formatDistanceToNow(new Date(alert.timestamp), { addSuffix: true })}</span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeRecentNotification("alert", alert.id)}
+                          className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                   ))}

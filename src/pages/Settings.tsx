@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -8,7 +8,7 @@ import { TrendingUp, Plus, X } from "lucide-react";
 import { useSettings } from "@/contexts/SettingsContext";
 
 export default function Settings() {
-  const { whaleThresholds, setWhaleThresholds } = useSettings();
+  const { whaleThresholds, setWhaleThresholds, defaultThreshold, setDefaultThreshold } = useSettings();
   
   const [thresholdInputs, setThresholdInputs] = useState<Record<string, string>>(() => {
     const inputs: Record<string, string> = {};
@@ -17,6 +17,13 @@ export default function Settings() {
     });
     return inputs;
   });
+
+  const [defaultThresholdInput, setDefaultThresholdInput] = useState<string>(defaultThreshold.toString());
+
+  // Sync default threshold input when context value changes
+  useEffect(() => {
+    setDefaultThresholdInput(defaultThreshold.toString());
+  }, [defaultThreshold]);
 
   // State for adding custom token
   const [newTokenName, setNewTokenName] = useState("");
@@ -66,6 +73,12 @@ export default function Settings() {
       amount: parseInt(thresholdInputs[t.token]) || t.amount,
     }));
     setWhaleThresholds(newThresholds);
+    
+    // Save default threshold for other tokens
+    const defaultAmount = parseInt(defaultThresholdInput);
+    if (!isNaN(defaultAmount) && defaultAmount > 0) {
+      setDefaultThreshold(defaultAmount);
+    }
   };
 
   return (
@@ -85,6 +98,28 @@ export default function Settings() {
               When an event exceeds these thresholds, it will be tagged as "Whale" across all pages.
             </p>
             
+            {/* Default Threshold for Other Tokens */}
+            <div className="border-b border-border pb-4 mb-4">
+              <Label className="text-base font-medium mb-2 block">
+                Other Tokens (Default)
+              </Label>
+              <p className="text-xs text-muted-foreground mb-3">
+                Threshold for tokens not listed below. This will be used for any token that doesn't have a specific threshold configured.
+              </p>
+              <div className="flex items-center gap-2 max-w-xs">
+                <Input
+                  type="number"
+                  value={defaultThresholdInput}
+                  onChange={(e) => setDefaultThresholdInput(e.target.value)}
+                  className="font-mono"
+                  placeholder={defaultThreshold.toString()}
+                />
+                <span className="text-sm text-muted-foreground whitespace-nowrap">
+                  tokens
+                </span>
+              </div>
+            </div>
+
             <div className="grid gap-4">
               {whaleThresholds.map((threshold) => (
                 <div key={threshold.token} className="flex items-center justify-between gap-4">

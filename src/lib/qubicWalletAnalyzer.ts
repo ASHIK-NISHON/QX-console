@@ -6,7 +6,7 @@
 
 export interface QubicRpcConfig {
   baseUrl: string;
-  fetchImpl?: typeof fetch;
+  fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 }
 
 export interface RpcError {
@@ -127,29 +127,47 @@ export interface WalletAnalysisResult {
 
 export class QubicRpcClient {
   private baseUrl: string;
-  private fetchImpl: typeof fetch;
+  private fetchImpl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
   constructor(config: QubicRpcConfig) {
     this.baseUrl = config.baseUrl.replace(/\/+$/, "");
-    this.fetchImpl = config.fetchImpl ?? fetch;
+    // Use a wrapper function to avoid "Illegal invocation" error
+    this.fetchImpl = config.fetchImpl ?? ((input, init) => fetch(input, init));
   }
 
   private async request<T>(path: string): Promise<T> {
     const url = this.baseUrl + path;
 
-    const res = await this.fetchImpl(url, {
-      method: "GET",
-      headers: {
-        "Accept": "application/json",
-      },
-    });
+    try {
+      const res = await this.fetchImpl(url, {
+        method: "GET",
+        headers: {
+          "Accept": "application/json",
+        },
+      });
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
+      }
+
+      return (await res.json()) as T;
+    } catch (error) {
+      // Handle CORS and network errors more specifically
+      if (error instanceof TypeError) {
+        const errorMsg = error.message.toLowerCase();
+        if (errorMsg.includes('failed to fetch') || errorMsg.includes('networkerror') || errorMsg.includes('cors')) {
+          const isCors = errorMsg.includes('cors') || errorMsg.includes('cross-origin');
+          throw new Error(
+            isCors 
+              ? `CORS error: The Qubic RPC API (${this.baseUrl}) is blocking cross-origin requests. Please check your browser console for details.`
+              : `Network error: Failed to connect to ${this.baseUrl}. ${error.message}`
+          );
+        }
+      }
+      // Re-throw other errors
+      throw error;
     }
-
-    return (await res.json()) as T;
   }
 
   async getBalance(address: string): Promise<BalanceInfo> {
@@ -287,24 +305,52 @@ export class WalletAnalyzer {
       };
     }
 
-    const [networkInfo, balanceInfo] = await Promise.all([
-      this.getNetworkInfo(),
-      this.getBalanceInfo(address),
-    ]);
+    try {
+      const [networkInfo, balanceInfo] = await Promise.all([
+        this.getNetworkInfo(),
+        this.getBalanceInfo(address),
+      ]);
 
-    const statistics = this.buildStatistics(balanceInfo);
-    const additionalData = await this.getAdditionalData(address);
+      // Check if balance fetch failed
+      if ("error" in balanceInfo) {
+        const errorMsg = String((balanceInfo as RpcError).error);
+        return {
+          address,
+          valid: false,
+          network_info: networkInfo,
+          balance_info: balanceInfo,
+          statistics: {},
+          additional_data: {},
+          error: errorMsg,
+        };
+      }
 
-    return {
-      address,
-      valid: true,
-      network_info: networkInfo,
-      balance_info: balanceInfo,
-      statistics,
-      additional_data: additionalData,
-    };
+      const statistics = this.buildStatistics(balanceInfo);
+      const additionalData = await this.getAdditionalData(address);
+
+      return {
+        address,
+        valid: true,
+        network_info: networkInfo,
+        balance_info: balanceInfo,
+        statistics,
+        additional_data: additionalData,
+      };
+    } catch (error) {
+      const errorMessage: string = error instanceof Error ? error.message : String(error);
+      return {
+        address,
+        valid: false,
+        network_info: { status: "disconnected" as const, error: errorMessage },
+        balance_info: { balance: 0 },
+        statistics: {},
+        additional_data: {},
+        error: errorMessage,
+      };
+    }
   }
 }
 
 // Default instance
+// Try direct URL first - if CORS is an issue, we can use the proxy
 export const walletAnalyzer = new WalletAnalyzer({ baseUrl: "https://rpc.qubic.org" });
