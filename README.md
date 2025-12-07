@@ -135,26 +135,6 @@ The dashboard tracks these QX smart contract operations:
 | `TransferShareManagementRights` | Transfer management rights |
 | `IssueAsset` | Create a new asset |
 
-## Webhook Payload Format
-
-The edge function expects events in this flat JSON format from n8n:
-
-```json
-{
-  "ProcedureTypeValue": 1,
-  "ProcedureTypeName": "AddToBidOrder",
-  "sourceId": "WALLET_ADDRESS_HERE",
-  "destId": "BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID",
-  "amount": "1000000",
-  "tickNumber": 12345678,
-  "timestamp": "2024-01-15T10:30:00Z",
-  "moneyFlow": true,
-  "IssuerAddress": "ISSUER_ADDRESS",
-  "AssetName": "QUBIC",
-  "Price": 100,
-  "NumberOfShares": 1000
-}
-```
 
 ## Setup & Installation
 
@@ -181,7 +161,7 @@ The edge function expects events in this flat JSON format from n8n:
    ```
 
 4. **Open the app**
-   Navigate to `http://localhost:5173`
+   Navigate to `http://localhost:8080`
 
 ### Environment Configuration
 
@@ -192,7 +172,7 @@ The app is pre-configured to connect to the Supabase project. The Supabase clien
 ### Edge Function Endpoint
 The webhook endpoint for receiving QX events:
 ```
-POST https://uffindnpaxxneabphbem.supabase.co/functions/v1/qx-webhook
+POST https://example.supabase.co/functions/v1/qx-webhook
 ```
 
 ### n8n Workflow Setup
@@ -200,32 +180,12 @@ POST https://uffindnpaxxneabphbem.supabase.co/functions/v1/qx-webhook
 2. Transform the data to match the expected payload format
 3. Send POST requests to the webhook endpoint
 
-### Alert/Airdrop Notifications
-Alerts and airdrops send notifications to:
-```
-POST https://automatatingwork.app.n8n.cloud/webhook/events
-```
-
-Payload format:
-```json
-{
-  "source": "discord",
-  "title": "alert",
-  "credentials": {
-    "discordWebhookUrl": "https://discord.com/api/webhooks/..."
-  },
-  "message": "🐋 Whale Alert: Large buy order detected..."
-}
-```
-
 ## Qubic RPC API Integration
 
 The dashboard fetches additional wallet details from the Qubic RPC API:
 - **Base URL**: `https://rpc.qubic.org`
 - **Balance Endpoint**: `POST /v1/balances`
 - **Latest Tick**: `GET /v1/latestTick`
-
-Implementation reference: [wallet-analyzer](https://github.com/ASHIK-NISHON/qubic-console-0886d1bf.git)
 
 ## Project Structure
 
@@ -272,23 +232,5 @@ supabase/
         └── index.ts
 ```
 
-## Security
-
-- **No Authentication Required** - Dashboard operates as an admin-only, public-facing application
-- **RLS Policies** - Supabase tables configured for public read/write access (admin use case)
-- **Credential Storage** - Integration credentials stored in browser localStorage   
-- **Credential Validation** - All credentials must pass connection tests before saving
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
-## License
-
-MIT License - See LICENSE file for details.
 
 ---
