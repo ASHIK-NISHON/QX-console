@@ -22,17 +22,6 @@ export function Header({ title }: HeaderProps) {
         </div>
 
         <div className="flex items-center gap-4">
-          {/* Network Indicator */}
-          <div className="text-sm text-muted-foreground">
-            Network: <span className="text-foreground font-medium">Qubic Mainnet</span>
-          </div>
-
-          {/* n8n Status */}
-          <Badge variant="outline" className="gap-1.5 border-success/30 text-success">
-            <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
-            n8n: Connected
-          </Badge>
-
           {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
