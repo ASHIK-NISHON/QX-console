@@ -174,7 +174,6 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your-supabase-anon-key
 
 Replace the placeholders with your actual Supabase project URL and anonymous/public key. You can find these in your Supabase project settings under API.
 
-**Note:** The `.env` file is already included in `.gitignore` and will not be committed to the repository.
 
 ## Webhook Integration
 
