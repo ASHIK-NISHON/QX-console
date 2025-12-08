@@ -183,7 +183,7 @@ The project includes a complete n8n workflow (`n8n workflow/QX-Console.json`) th
 
 The n8n workflow acts as a middleware between EasyConnect (blockchain monitor) and the QX Console application. It processes incoming events and routes them appropriately.
 
-![n8n Workflow Diagram](n8n%20workflow/Screenshot%202025-12-08%20084640.png)
+![n8n Workflow Diagram](n8n%20workflow/n8n-workflow.png)
 
 *Workflow visualization showing the dual-path data flow: Raw QX transactions from EasyConnect and Alert/Airdrop notifications from the dashboard.*
 
@@ -221,66 +221,6 @@ This path handles alert and airdrop notifications from the dashboard:
 - **Build Response** - Constructs success response message
 - **Send Response to Website** - Sends response back to the dashboard webhook endpoint
 
-### Expected Payload Formats
-
-#### Raw QX Transaction (from EasyConnect)
-```json
-{
-  "body": {
-    "ProcedureTypeValue": 1,
-    "ProcedureTypeName": "AddToBidOrder",
-    "RawTransaction": {
-      "transaction": {
-        "sourceId": "ABCD...",
-        "destId": "EFGH...",
-        "amount": 1000000,
-        "tickNumber": 12345
-      },
-      "timestamp": "1702000000000"
-    },
-    "ParsedTransaction": {
-      "AssetName": "QUBIC",
-      "IssuerAddress": "IJKL...",
-      "Price": 50,
-      "NumberOfShares": 10000
-    }
-  }
-}
-```
-
-#### Alert/Airdrop Notification (from Dashboard)
-```json
-{
-  "source": "telegram",
-  "title": "Whale Alert",
-  "message": "Large transaction detected...",
-  "credentials": {
-    "telegram": {
-      "token": "bot_token",
-      "chatId": "chat_id"
-    },
-    "discord": {
-      "webhookUrl": "https://discord.com/api/webhooks/..."
-    },
-    "twitter": {
-      "consumerKey": "...",
-      "consumerSecret": "...",
-      "accessToken": "...",
-      "accessTokenSecret": "..."
-    }
-  }
-}
-```
-
-#### Response Format (to Dashboard)
-The workflow sends a response back to the dashboard webhook:
-```json
-{
-  "success": true,
-  "response": "Whale Alert message sent to telegram"
-}
-```
-
 ### n8n Workflow Setup
 
 1. **Import the Workflow**
@@ -290,7 +230,8 @@ The workflow sends a response back to the dashboard webhook:
 
 2. **Configure Webhook URLs**
    - Update the Supabase webhook URL in the "Send to Website Webhook" and "Send Response to Website" nodes
-   - Replace `https://uffindnpaxxneabphbem.supabase.co` with your Supabase project URL
+   - Replace the example URL with your actual Supabase project URL
+   - Example format: `https://your-project-id.supabase.co/functions/v1/qx-webhook`
 
 3. **Set Up Credentials** (Optional)
    - For production, configure n8n credentials for Telegram, Discord, and Twitter

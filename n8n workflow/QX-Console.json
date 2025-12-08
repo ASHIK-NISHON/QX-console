@@ -112,7 +112,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://uffindnpaxxneabphbem.supabase.co/functions/v1/qx-webhook",
+        "url": "https://your-project-id.supabase.co/functions/v1/qx-webhook",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json }}",
@@ -376,7 +376,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://uffindnpaxxneabphbem.supabase.co/functions/v1/qx-webhook",
+        "url": "https://your-project-id.supabase.co/functions/v1/qx-webhook",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json.response }}",
