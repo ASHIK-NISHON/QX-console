@@ -165,7 +165,16 @@ The dashboard tracks these QX smart contract operations:
 
 ### Environment Configuration
 
-The app is pre-configured to connect to the Supabase project. The Supabase client is initialized in `src/integrations/supabase/client.ts`.
+Create a `.env` file in the root directory with your Supabase credentials:
+
+```env
+VITE_SUPABASE_URL=your-supabase-project-url
+VITE_SUPABASE_PUBLISHABLE_KEY=your-supabase-anon-key
+```
+
+Replace the placeholders with your actual Supabase project URL and anonymous/public key. You can find these in your Supabase project settings under API.
+
+**Note:** The `.env` file is already included in `.gitignore` and will not be committed to the repository.
 
 ## Webhook Integration
 
