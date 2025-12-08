@@ -177,7 +177,7 @@ POST https://example.supabase.co/functions/v1/qx-webhook
 
 ## n8n Workflow
 
-The project includes a complete n8n workflow (`n8n workflow/QX-Console.json`) that handles two main data flows:
+The project includes a complete n8n workflow (`n8n workflow/QX-console workflow.json`) that handles two main data flows:
 
 ### Workflow Overview
 
@@ -225,7 +225,7 @@ This path handles alert and airdrop notifications from the dashboard:
 
 1. **Import the Workflow**
    - Open your n8n instance
-   - Import the workflow file: `n8n workflow/QX-Console.json`
+   - Import the workflow file: `n8n workflow/QX-console workflow.json`
    - The workflow will be imported with all nodes and connections
 
 2. **Configure Webhook URLs**
