@@ -146,7 +146,7 @@ The dashboard tracks these QX smart contract operations:
 
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/ASHIK-NISHON/QX-console.git
    cd qx-events-dashboard
    ```
 
