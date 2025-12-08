@@ -185,6 +185,8 @@ The n8n workflow acts as a middleware between EasyConnect (blockchain monitor) a
 
 ![n8n Workflow Diagram](n8n%20workflow/Screenshot%202025-12-08%20084640.png)
 
+*Workflow visualization showing the dual-path data flow: Raw QX transactions from EasyConnect and Alert/Airdrop notifications from the dashboard.*
+
 ### Workflow Structure
 
 The workflow consists of two main paths:
