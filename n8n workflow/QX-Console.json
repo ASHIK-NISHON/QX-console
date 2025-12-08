@@ -1,0 +1,570 @@
+{
+  "name": "easyconnect",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "/events",
+        "responseMode": "lastNode",
+        "responseData": "noData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -560,
+        416
+      ],
+      "id": "6078e64c-e99f-454d-80d0-2daa21fcdcc7",
+      "name": "events",
+      "webhookId": "361d8add-8dd0-4f99-818d-da51db187f66",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "ProcedureTypeValue",
+              "value": "={{ $json.body.ProcedureTypeValue }}",
+              "type": "number"
+            },
+            {
+              "id": "id-2",
+              "name": "ProcedureTypeName",
+              "value": "={{ $json.body.ProcedureTypeName }}",
+              "type": "string"
+            },
+            {
+              "id": "id-3",
+              "name": "sourceId",
+              "value": "={{ $json.body.RawTransaction.transaction.sourceId }}",
+              "type": "string"
+            },
+            {
+              "id": "id-4",
+              "name": "destId",
+              "value": "={{ $json.body.RawTransaction.transaction.destId }}",
+              "type": "string"
+            },
+            {
+              "id": "id-5",
+              "name": "amount",
+              "value": "={{ $json.body.RawTransaction.transaction.amount }}",
+              "type": "number"
+            },
+            {
+              "id": "id-6",
+              "name": "tickNumber",
+              "value": "={{ $json.body.RawTransaction.transaction.tickNumber }}",
+              "type": "number"
+            },
+            {
+              "id": "id-7",
+              "name": "timestamp",
+              "value": "={{ new Date(parseInt($json.body.RawTransaction.timestamp)).toISOString() }}",
+              "type": "string"
+            },
+            {
+              "id": "id-8",
+              "name": "moneyFlow",
+              "value": "={{ $json.body.RawTransaction.moneyFlew }}",
+              "type": "boolean"
+            },
+            {
+              "id": "id-9",
+              "name": "IssuerAddress",
+              "value": "={{ $json.body.ParsedTransaction.IssuerAddress }}",
+              "type": "string"
+            },
+            {
+              "id": "id-10",
+              "name": "AssetName",
+              "value": "={{ $json.body.ParsedTransaction.AssetName }}",
+              "type": "string"
+            },
+            {
+              "id": "id-11",
+              "name": "Price",
+              "value": "={{ $json.body.ParsedTransaction.Price }}",
+              "type": "number"
+            },
+            {
+              "id": "id-12",
+              "name": "NumberOfShares",
+              "value": "={{ $json.body.ParsedTransaction.NumberOfShares }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "248969b1-46d5-4d37-8056-dc26e01a4da1",
+      "name": "Extract Transaction Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -128,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://uffindnpaxxneabphbem.supabase.co/functions/v1/qx-webhook",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "f410de92-cc2f-4579-916c-7dbe1e229149",
+      "name": "Send to Website Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        96,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "id-1",
+              "leftValue": "={{ $('events').item.json.body.ProcedureTypeValue }}",
+              "operator": {
+                "type": "string",
+                "operation": "exists"
+              }
+            },
+            {
+              "id": "id-2",
+              "leftValue": "={{ $('events').item.json.body.RawTransaction }}",
+              "operator": {
+                "type": "object",
+                "operation": "exists"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "c471819a-332d-4e7d-95fb-8520e854fe54",
+      "name": "Detect Source",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -336,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $json.credentials.telegramToken }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"chat_id\": \"{{ $json.credentials.telegramChatId }}\", \"text\": \"{{ $json.message }}\" }",
+        "options": {}
+      },
+      "id": "ec04e569-3cb2-44ef-b1d7-45d6059cd2e8",
+      "name": "Send to Telegram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        560,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twitter.com/2/tweets",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $json.authHeader }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"text\": \"{{ $json.message }}\" }",
+        "options": {}
+      },
+      "id": "4b7e51f2-a548-4925-bbcb-fe3396bdeae7",
+      "name": "Send to X (Twitter)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        560,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.credentials.discordWebhookUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"content\": \"{{ $json.message }}\" }",
+        "options": {}
+      },
+      "id": "5bd1e1b2-0154-4668-80a5-99b7a6b58c2c",
+      "name": "Send to Discord",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        544,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize alert data from webhook\nconst items = $input.all();\nconst normalizedItems = [];\n\n// Process each input item\nfor (const item of items) {\n  const body = item.json.body || item.json;\n  \n  // Check if the body itself is an alert or contains alerts array\n  let alerts = [];\n  \n  if (Array.isArray(body.alerts)) {\n    // Body contains an alerts array\n    alerts = body.alerts;\n  } else if (Array.isArray(body)) {\n    // Body is an array of alerts\n    alerts = body;\n  } else if (body.source || body.message || body.title) {\n    // Body is a single alert object\n    alerts = [body];\n  } else {\n    // Fallback: treat the whole body as a single alert\n    alerts = [body];\n  }\n  \n  // Process each alert\n  for (const alert of alerts) {\n    normalizedItems.push({\n      json: {\n        source: alert.source || 'unknown',\n        title: alert.title || '',\n        message: alert.message || '',\n        credentials: alert.credentials || {},\n        telegramToken: alert.credentials?.telegram?.token || '',\n        telegramChatId: alert.credentials?.telegram?.chatId || '',\n        discordWebhookUrl: alert.credentials?.discord?.webhookUrl || '',\n        twitterConsumerKey: alert.credentials?.twitter?.consumerKey || '',\n        twitterConsumerSecret: alert.credentials?.twitter?.consumerSecret || '',\n        twitterAccessToken: alert.credentials?.twitter?.accessToken || '',\n        twitterAccessTokenSecret: alert.credentials?.twitter?.accessTokenSecret || ''\n      }\n    });\n  }\n}\n\nreturn normalizedItems;"
+      },
+      "id": "459823f7-16ba-4d33-9b0a-189bcc884a27",
+      "name": "Normalize Alert Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "id-1",
+                    "leftValue": "={{ $json.source }}",
+                    "rightValue": "telegram",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "id-1",
+                    "leftValue": "={{ $json.source }}",
+                    "rightValue": "discord",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "id-1",
+                    "leftValue": "={{ $json.source }}",
+                    "rightValue": "twitter",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "id": "id-2",
+                    "leftValue": "={{ $json.source }}",
+                    "rightValue": "x",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "73848a59-3d72-409f-a11f-7916bc207120",
+      "name": "Route by Source",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        144,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Generate OAuth 1.0a signature for Twitter API\nconst crypto = require('crypto');\n\n// Get credentials from input\nconst consumerKey = $input.item.json.twitterConsumerKey;\nconst consumerSecret = $input.item.json.twitterConsumerSecret;\nconst accessToken = $input.item.json.twitterAccessToken;\nconst accessTokenSecret = $input.item.json.twitterAccessTokenSecret;\n\n// OAuth parameters\nconst oauthNonce = crypto.randomBytes(32).toString('base64').replace(/\\W/g, '');\nconst oauthTimestamp = Math.floor(Date.now() / 1000).toString();\nconst oauthSignatureMethod = 'HMAC-SHA1';\nconst oauthVersion = '1.0';\n\n// Create parameter string\nconst params = {\n  oauth_consumer_key: consumerKey,\n  oauth_nonce: oauthNonce,\n  oauth_signature_method: oauthSignatureMethod,\n  oauth_timestamp: oauthTimestamp,\n  oauth_token: accessToken,\n  oauth_version: oauthVersion\n};\n\n// Sort parameters and create signature base string\nconst sortedParams = Object.keys(params)\n  .sort()\n  .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)\n  .join('&');\n\nconst httpMethod = 'POST';\nconst baseUrl = 'https://api.twitter.com/2/tweets';\nconst signatureBaseString = `${httpMethod}&${encodeURIComponent(baseUrl)}&${encodeURIComponent(sortedParams)}`;\n\n// Create signing key\nconst signingKey = `${encodeURIComponent(consumerSecret)}&${encodeURIComponent(accessTokenSecret)}`;\n\n// Generate signature\nconst oauthSignature = crypto\n  .createHmac('sha1', signingKey)\n  .update(signatureBaseString)\n  .digest('base64');\n\n// Build OAuth header\nconst authHeader = `OAuth oauth_consumer_key=\"${encodeURIComponent(consumerKey)}\", oauth_nonce=\"${encodeURIComponent(oauthNonce)}\", oauth_signature=\"${encodeURIComponent(oauthSignature)}\", oauth_signature_method=\"${encodeURIComponent(oauthSignatureMethod)}\", oauth_timestamp=\"${encodeURIComponent(oauthTimestamp)}\", oauth_token=\"${encodeURIComponent(accessToken)}\", oauth_version=\"${encodeURIComponent(oauthVersion)}\"`;\n\n// Return the input data with the auth header added\nreturn {\n  ...($input.item.json),\n  authHeader: authHeader\n};"
+      },
+      "id": "bf84ec5e-ef56-4596-a125-4484853a192e",
+      "name": "Generate Twitter OAuth",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        336,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "response",
+              "value": "={{ $('Normalize Alert Data').item.json.title }} message sent to {{ $('Normalize Alert Data').item.json.source }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "05918e1e-bf2c-41a1-9dbc-34a2cfaa82f1",
+      "name": "Build Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        784,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://uffindnpaxxneabphbem.supabase.co/functions/v1/qx-webhook",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.response }}",
+        "options": {}
+      },
+      "id": "c9e627ff-238f-4221-b51b-5bd0f2519e71",
+      "name": "Send Response to Website",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1008,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "content": "Send the easyconnect Raw QX data to my app backend.",
+        "height": 288,
+        "width": 512,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -224,
+        80
+      ],
+      "typeVersion": 1,
+      "id": "a9958cb5-a857-43e9-b048-4b39cd12f8f8",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "Send the message to Telagran,Discord or X.",
+        "height": 752,
+        "width": 752
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        448,
+        64
+      ],
+      "typeVersion": 1,
+      "id": "3b477984-497e-4c0e-ab43-7d3e0cdb6d21",
+      "name": "Sticky Note1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "events": {
+      "main": [
+        [
+          {
+            "node": "Detect Source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Source": {
+      "main": [
+        [
+          {
+            "node": "Extract Transaction Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Normalize Alert Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Transaction Data": {
+      "main": [
+        [
+          {
+            "node": "Send to Website Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Alert Data": {
+      "main": [
+        [
+          {
+            "node": "Route by Source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Source": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send to Discord",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Twitter OAuth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Twitter OAuth": {
+      "main": [
+        [
+          {
+            "node": "Send to X (Twitter)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Telegram": {
+      "main": [
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Discord": {
+      "main": [
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to X (Twitter)": {
+      "main": [
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Response": {
+      "main": [
+        [
+          {
+            "node": "Send Response to Website",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "795baf07-ba07-4a32-85b1-42919a90e10b",
+  "meta": {
+    "instanceId": "2e0263e26e7bdaeb770c4d45ccf1786e7c1105cfab012e82976270ba5c44e0ed"
+  },
+  "id": "fbsfYMgb09hIZmKX",
+  "tags": []
+}

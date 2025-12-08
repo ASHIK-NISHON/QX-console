@@ -175,10 +175,142 @@ The webhook endpoint for receiving QX events:
 POST https://example.supabase.co/functions/v1/qx-webhook
 ```
 
+## n8n Workflow
+
+The project includes a complete n8n workflow (`n8n workflow/QX-Console.json`) that handles two main data flows:
+
+### Workflow Overview
+
+The n8n workflow acts as a middleware between EasyConnect (blockchain monitor) and the QX Console application. It processes incoming events and routes them appropriately.
+
+![n8n Workflow Diagram](n8n%20workflow/Screenshot%202025-12-08%20084640.png)
+
+### Workflow Structure
+
+The workflow consists of two main paths:
+
+#### 1. **Raw QX Data Flow** (EasyConnect → Dashboard)
+This path handles raw transaction data from EasyConnect:
+
+- **Webhook Trigger** (`/events`) - Receives POST requests from EasyConnect
+- **Detect Source** - Checks if the incoming data contains raw QX transaction data
+- **Extract Transaction Data** - Extracts and normalizes transaction fields:
+  - `ProcedureTypeValue` & `ProcedureTypeName` - Transaction type
+  - `sourceId` & `destId` - Wallet addresses
+  - `amount`, `tickNumber`, `timestamp` - Transaction details
+  - `AssetName`, `IssuerAddress`, `Price`, `NumberOfShares` - Asset information
+- **Send to Website Webhook** - Forwards the normalized data to the Supabase Edge Function endpoint
+
+#### 2. **Alert/Airdrop Notification Flow** (Dashboard → External Platforms)
+This path handles alert and airdrop notifications from the dashboard:
+
+- **Normalize Alert Data** - Processes alert/airdrop payloads from the dashboard
+  - Supports single alerts or arrays of alerts
+  - Extracts credentials for Telegram, Discord, and X (Twitter)
+  - Normalizes the data structure for routing
+- **Route by Source** - Routes notifications based on the target platform:
+  - **Route 0**: Telegram (`source: "telegram"`)
+  - **Route 1**: Discord (`source: "discord"`)
+  - **Route 2**: X/Twitter (`source: "twitter"` or `"x"`)
+- **Send to Telegram** - Posts message to Telegram using Bot API
+- **Send to Discord** - Posts message to Discord webhook
+- **Generate Twitter OAuth** - Generates OAuth 1.0a signature for Twitter API v2
+- **Send to X (Twitter)** - Posts tweet using Twitter API v2
+- **Build Response** - Constructs success response message
+- **Send Response to Website** - Sends response back to the dashboard webhook endpoint
+
+### Expected Payload Formats
+
+#### Raw QX Transaction (from EasyConnect)
+```json
+{
+  "body": {
+    "ProcedureTypeValue": 1,
+    "ProcedureTypeName": "AddToBidOrder",
+    "RawTransaction": {
+      "transaction": {
+        "sourceId": "ABCD...",
+        "destId": "EFGH...",
+        "amount": 1000000,
+        "tickNumber": 12345
+      },
+      "timestamp": "1702000000000"
+    },
+    "ParsedTransaction": {
+      "AssetName": "QUBIC",
+      "IssuerAddress": "IJKL...",
+      "Price": 50,
+      "NumberOfShares": 10000
+    }
+  }
+}
+```
+
+#### Alert/Airdrop Notification (from Dashboard)
+```json
+{
+  "source": "telegram",
+  "title": "Whale Alert",
+  "message": "Large transaction detected...",
+  "credentials": {
+    "telegram": {
+      "token": "bot_token",
+      "chatId": "chat_id"
+    },
+    "discord": {
+      "webhookUrl": "https://discord.com/api/webhooks/..."
+    },
+    "twitter": {
+      "consumerKey": "...",
+      "consumerSecret": "...",
+      "accessToken": "...",
+      "accessTokenSecret": "..."
+    }
+  }
+}
+```
+
+#### Response Format (to Dashboard)
+The workflow sends a response back to the dashboard webhook:
+```json
+{
+  "success": true,
+  "response": "Whale Alert message sent to telegram"
+}
+```
+
 ### n8n Workflow Setup
-1. Configure your n8n workflow to receive events from EasyConnect
-2. Transform the data to match the expected payload format
-3. Send POST requests to the webhook endpoint
+
+1. **Import the Workflow**
+   - Open your n8n instance
+   - Import the workflow file: `n8n workflow/QX-Console.json`
+   - The workflow will be imported with all nodes and connections
+
+2. **Configure Webhook URLs**
+   - Update the Supabase webhook URL in the "Send to Website Webhook" and "Send Response to Website" nodes
+   - Replace `https://uffindnpaxxneabphbem.supabase.co` with your Supabase project URL
+
+3. **Set Up Credentials** (Optional)
+   - For production, configure n8n credentials for Telegram, Discord, and Twitter
+   - Alternatively, credentials can be passed in the request payload from the dashboard
+
+4. **Activate the Workflow**
+   - Activate the workflow in n8n
+   - Copy the webhook URL from the "events" node
+   - Configure EasyConnect to send events to this webhook URL
+
+5. **Configure Dashboard**
+   - In the QX Console dashboard, go to Settings → Integrations
+   - Enter your n8n webhook URL (the URL from the "events" node)
+   - This URL will be used for sending alerts and airdrop notifications
+
+### Workflow Features
+
+- **Dual Purpose**: Handles both raw blockchain data and user-triggered notifications
+- **Multi-Platform Support**: Routes notifications to Telegram, Discord, and X (Twitter)
+- **OAuth 1.0a Authentication**: Automatically generates Twitter API signatures
+- **Response Handling**: Sends success/failure responses back to the dashboard
+- **Error Resilience**: Each path operates independently, so failures in one don't affect the other
 
 ## Qubic RPC API Integration
 
