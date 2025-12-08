@@ -313,3 +313,7 @@ supabase/
 
 App demo->https://qx-console.vercel.app/
 *optimesed for desktop*
+
+---
+
+**Built for admins and developers** ❤️
