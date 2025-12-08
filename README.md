@@ -320,7 +320,7 @@ supabase/
 
 
 App demo->https://qx-console.vercel.app/
-*optimesed for desktop*
+*optimesed for desktop*.   -demo ofline😪
 
 ---
 
