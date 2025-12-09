@@ -105,20 +105,6 @@ export default function Overview() {
     return { displayWhale: null, isActualWhale: false };
   }, [events, whaleEvents]);
 
-  // Show toast notification when whale events are detected
-  useEffect(() => {
-    const currentCount = whaleEvents.length;
-    
-    if (prevWhaleCountRef.current !== null && currentCount > 0 && currentCount !== prevWhaleCountRef.current) {
-      toast({
-        title: "🐋 Whale Activity Detected!",
-        description: `${currentCount} whale event${currentCount > 1 ? 's' : ''} found based on your thresholds.`,
-      });
-    }
-    
-    prevWhaleCountRef.current = currentCount;
-  }, [whaleEvents.length, whaleThresholds]);
-
   const handleEventClick = (event: DisplayEvent) => {
     setSelectedEvent(event);
     setDialogOpen(true);
@@ -173,6 +159,25 @@ export default function Overview() {
 
     return true;
   });
+
+  // Filtered whale events (matches the current filters/search)
+  const filteredWhaleEvents = useMemo(() => {
+    return filteredEvents.filter((event) => detectWhaleInEvent(event));
+  }, [filteredEvents, detectWhaleInEvent]);
+
+  // Show toast notification when whale events are detected in the current view
+  useEffect(() => {
+    const currentCount = filteredWhaleEvents.length;
+    
+    if (prevWhaleCountRef.current !== null && currentCount > 0 && currentCount !== prevWhaleCountRef.current) {
+      toast({
+        title: "🐋 Whale Activity Detected!",
+        description: `${currentCount} whale event${currentCount > 1 ? 's' : ''} found in your current filters and thresholds.`,
+      });
+    }
+    
+    prevWhaleCountRef.current = currentCount;
+  }, [filteredWhaleEvents.length, whaleThresholds]);
 
   const liveEvents = filteredEvents.slice(0, 5);
 
