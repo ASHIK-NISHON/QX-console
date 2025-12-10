@@ -321,7 +321,7 @@ supabase/
 
 App demo->https://qx-console.vercel.app/
 *optimesed for desktop*.   
-                      -demo live works till the easyconnect limitations ends🙂.
+                      -live demo receive updates till the easyconnect limitations ends🙂.
 
 ---
 
