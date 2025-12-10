@@ -50,13 +50,34 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
   const [selectedView, setSelectedView] = useState<"activity" | "volume">("activity");
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
 
+  // Safely parse timestamps (supports seconds or milliseconds)
+  const getEventDate = (evt: DisplayEvent) => {
+    let raw: number;
+    if (typeof evt.timestamp === "number") {
+      raw = evt.timestamp;
+    } else {
+      // Handle ISO strings, numeric strings, or other string formats
+      const parsed = Number(evt.timestamp);
+      raw = Number.isFinite(parsed) ? parsed : Date.parse(evt.timestamp);
+    }
+
+    // Fallback: if still invalid, use now to avoid filtering everything out
+    if (!Number.isFinite(raw)) {
+      return new Date();
+    }
+
+    // If in seconds (10 digits), convert to ms
+    const ms = raw < 1e12 ? raw * 1000 : raw;
+    return new Date(ms);
+  };
+
   // Get the oldest and newest event timestamps
   const { oldestTime, newestTime } = useMemo(() => {
     if (events.length === 0) {
       const now = new Date();
       return { oldestTime: now, newestTime: now };
     }
-    const timestamps = events.map((e) => new Date(e.timestamp).getTime());
+    const timestamps = events.map((e) => getEventDate(e).getTime());
     return {
       oldestTime: new Date(Math.min(...timestamps)),
       newestTime: new Date(Math.max(...timestamps)),
@@ -139,7 +160,7 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
       const slotStart = new Date(slotEnd.getTime() - effectiveSlotDuration);
 
       const slotEvents = events.filter((event) => {
-        const eventTime = new Date(event.timestamp);
+        const eventTime = getEventDate(event);
         return eventTime >= slotStart && eventTime < slotEnd;
       });
 
