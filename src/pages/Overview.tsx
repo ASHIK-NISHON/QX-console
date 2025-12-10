@@ -180,7 +180,8 @@ export default function Overview() {
     prevWhaleCountRef.current = currentCount;
   }, [filteredWhaleEvents.length, whaleThresholds]);
 
-  const liveEvents = filteredEvents.slice(0, 5);
+  // Show more live events to better fill the list
+  const liveEvents = filteredEvents.slice(0, 15);
 
   // Get unique tokens from events for top wallets calculation
   const topWallets = useMemo(() => {

@@ -27,7 +27,7 @@ interface TimeSlot {
   endTime: Date;
 }
 
-type TimeRange = "all" | "7d" | "24h" | "12h" | "6h" | "1h";
+type TimeRange = "all" | "30d" | "7d" | "24h" | "12h" | "6h" | "1h";
 
 const ACTION_COLORS = {
   bidOrders: "from-emerald-500 to-emerald-400",
@@ -103,6 +103,7 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
         "12h": 12 * 60 * 60 * 1000,
         "24h": 24 * 60 * 60 * 1000,
         "7d": 7 * 24 * 60 * 60 * 1000,
+        "30d": 30 * 24 * 60 * 60 * 1000,
         "all": 0,
       };
       
@@ -123,6 +124,12 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
       } else if (timeRange === "24h") {
         slotCount = 12;
         slotDuration = 2 * 60 * 60 * 1000; // 2-hour slots
+      } else if (timeRange === "7d") {
+        slotCount = 14;
+        slotDuration = 12 * 60 * 60 * 1000; // 12-hour slots
+      } else if (timeRange === "30d") {
+        slotCount = 30;
+        slotDuration = 24 * 60 * 60 * 1000; // 1-day slots
       } else {
         slotCount = 7;
         slotDuration = 24 * 60 * 60 * 1000; // 1-day slots
@@ -249,6 +256,7 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
             className="px-2 py-1.5 text-xs rounded-md bg-background/50 border border-border text-foreground hover:bg-background/80 transition-colors"
           >
             <option value="all">All Time</option>
+            <option value="30d">Last 30 Days</option>
             <option value="7d">Last 7 Days</option>
             <option value="24h">Last 24 Hours</option>
             <option value="12h">Last 12 Hours</option>
@@ -509,37 +517,37 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
         ))}
       </div>
 
-      {/* Quick Stats - Enhanced with all categories */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 pt-2">
-        <div className="bg-background/30 rounded-md p-2 text-center border border-border/30 hover:border-emerald-500/30 hover:shadow-md hover:shadow-emerald-500/10 transition-all">
-          <div className="text-lg font-bold text-emerald-500 animate-fade-in">{totalBids.toLocaleString()}</div>
-          <div className="text-[9px] text-muted-foreground mt-0.5 font-medium">Bid Orders</div>
+      {/* Quick Stats - Compact */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1.5 pt-2 text-center text-[10px]">
+        <div className="bg-background/20 rounded border border-border/40 px-2 py-1.5">
+          <div className="text-base font-bold text-emerald-500">{totalBids.toLocaleString()}</div>
+          <div className="text-[9px] text-muted-foreground">Bid Orders</div>
         </div>
-        <div className="bg-background/30 rounded-md p-2 text-center border border-border/30 hover:border-rose-500/30 hover:shadow-md hover:shadow-rose-500/10 transition-all">
-          <div className="text-lg font-bold text-rose-500 animate-fade-in">{totalAsks.toLocaleString()}</div>
-          <div className="text-[9px] text-muted-foreground mt-0.5 font-medium">Ask Orders</div>
+        <div className="bg-background/20 rounded border border-border/40 px-2 py-1.5">
+          <div className="text-base font-bold text-rose-500">{totalAsks.toLocaleString()}</div>
+          <div className="text-[9px] text-muted-foreground">Ask Orders</div>
         </div>
-        <div className="bg-background/30 rounded-md p-2 text-center border border-border/30 hover:border-violet-500/30 hover:shadow-md hover:shadow-violet-500/10 transition-all">
-          <div className="text-lg font-bold text-violet-500 animate-fade-in">{totalTransfers.toLocaleString()}</div>
-          <div className="text-[9px] text-muted-foreground mt-0.5 font-medium">Transfers</div>
+        <div className="bg-background/20 rounded border border-border/40 px-2 py-1.5">
+          <div className="text-base font-bold text-violet-500">{totalTransfers.toLocaleString()}</div>
+          <div className="text-[9px] text-muted-foreground">Transfers</div>
         </div>
-        <div className="bg-background/30 rounded-md p-2 text-center border border-border/30 hover:border-amber-500/30 hover:shadow-md hover:shadow-amber-500/10 transition-all">
-          <div className="text-lg font-bold text-amber-500 animate-fade-in">{totalIssues.toLocaleString()}</div>
-          <div className="text-[9px] text-muted-foreground mt-0.5 font-medium">Issues</div>
+        <div className="bg-background/20 rounded border border-border/40 px-2 py-1.5">
+          <div className="text-base font-bold text-amber-500">{totalIssues.toLocaleString()}</div>
+          <div className="text-[9px] text-muted-foreground">Issues</div>
         </div>
-        <div className="bg-background/30 rounded-md p-2 text-center border border-border/30 hover:border-slate-500/30 hover:shadow-md hover:shadow-slate-500/10 transition-all">
-          <div className="text-lg font-bold text-slate-400 animate-fade-in">{totalCancels.toLocaleString()}</div>
-          <div className="text-[9px] text-muted-foreground mt-0.5 font-medium">Cancels</div>
+        <div className="bg-background/20 rounded border border-border/40 px-2 py-1.5">
+          <div className="text-base font-bold text-slate-400">{totalCancels.toLocaleString()}</div>
+          <div className="text-[9px] text-muted-foreground">Cancels</div>
         </div>
         {totalOther > 0 && (
-          <div className="bg-background/30 rounded-md p-2 text-center border border-border/30 hover:border-gray-500/30 hover:shadow-md hover:shadow-gray-500/10 transition-all">
-            <div className="text-lg font-bold text-gray-400 animate-fade-in">{totalOther.toLocaleString()}</div>
-            <div className="text-[9px] text-muted-foreground mt-0.5 font-medium">Other</div>
+          <div className="bg-background/20 rounded border border-border/40 px-2 py-1.5">
+            <div className="text-base font-bold text-gray-400">{totalOther.toLocaleString()}</div>
+            <div className="text-[9px] text-muted-foreground">Other</div>
           </div>
         )}
-        <div className={`bg-background/40 rounded-md p-2 text-center border-2 border-primary/30 hover:border-primary/50 hover:shadow-md hover:shadow-primary/20 transition-all ${totalOther > 0 ? 'sm:col-span-2 lg:col-span-1' : 'sm:col-span-3 lg:col-span-1'}`}>
-          <div className="text-lg font-bold text-primary animate-fade-in">{totalActivity.toLocaleString()}</div>
-          <div className="text-[9px] text-muted-foreground mt-0.5 font-semibold">Total Events</div>
+        <div className={`bg-background/25 rounded border-2 border-primary/30 px-2 py-1.5 ${totalOther > 0 ? 'sm:col-span-2 lg:col-span-1' : 'sm:col-span-3 lg:col-span-1'}`}>
+          <div className="text-base font-bold text-primary">{totalActivity.toLocaleString()}</div>
+          <div className="text-[9px] text-muted-foreground font-semibold">Total Events</div>
         </div>
       </div>
       
@@ -547,7 +555,20 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
       <div className="mt-3 pt-3 border-t border-border/50">
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">
-            Total Volume {timeRange === "all" ? "(All Time)" : `(${timeRange.toUpperCase()})`}:
+            Total Volume{" "}
+            {timeRange === "all"
+              ? "(All Time)"
+              : timeRange === "30d"
+              ? "(Last 30 Days)"
+              : timeRange === "7d"
+              ? "(Last 7 Days)"
+              : timeRange === "24h"
+              ? "(Last 24 Hours)"
+              : timeRange === "12h"
+              ? "(Last 12 Hours)"
+              : timeRange === "6h"
+              ? "(Last 6 Hours)"
+              : "(Last 1 Hour)"}:
           </span>
           <span className="text-lg font-bold text-primary">
             {timeSlots.reduce((acc, s) => acc + s.volume, 0) >= 1000000000
