@@ -203,30 +203,54 @@ export default function Overview() {
 
   const kpiData = [
     {
-      title: "Total Events (24h)",
-      value: kpiStats?.totalEvents24h?.toLocaleString() || "0",
-      trend: { value: 0, isPositive: true },
+      title: "Total Events",
+      value: kpiStats?.totalEvents?.toLocaleString() || "0",
+      trend: kpiStats ? {
+        value: kpiStats.totalEvents24h > 0 
+          ? Math.round((kpiStats.totalEvents24h / kpiStats.totalEvents) * 100) 
+          : 0,
+        isPositive: true
+      } : undefined,
       icon: Activity,
     },
     {
-      title: "Active Wallets (24h)",
-      value: kpiStats?.activeWallets24h?.toLocaleString() || "0",
-      trend: { value: 0, isPositive: true },
+      title: "Active Wallets",
+      value: kpiStats?.activeWallets?.toLocaleString() || "0",
+      trend: kpiStats ? {
+        value: kpiStats.activeWallets > 0 
+          ? Math.round((kpiStats.activeWallets24h / kpiStats.activeWallets) * 100) 
+          : 0,
+        isPositive: true
+      } : undefined,
       icon: Wallet,
     },
     {
-      title: "Whales Detected (24h)",
-      value: kpiStats?.whalesDetected24h?.toLocaleString() || "0",
-      trend: { value: 0, isPositive: false },
+      title: "Whales Detected",
+      value: kpiStats?.whalesDetected?.toLocaleString() || "0",
+      trend: kpiStats ? {
+        value: kpiStats.whalesDetected > 0 
+          ? Math.round((kpiStats.whalesDetected24h / kpiStats.whalesDetected) * 100) 
+          : 0,
+        isPositive: true
+      } : undefined,
       icon: Fish,
     },
     {
-      title: "Total Volume (24h)",
-      value: kpiStats?.totalVolume24h ? 
-        (kpiStats.totalVolume24h >= 1000000 ? 
-          `${(kpiStats.totalVolume24h / 1000000).toFixed(1)}M` : 
-          kpiStats.totalVolume24h.toLocaleString()) : "0",
-      trend: { value: 0, isPositive: true },
+      title: "Total Volume",
+      value: kpiStats?.totalVolume ? 
+        (kpiStats.totalVolume >= 1000000000 ? 
+          `${(kpiStats.totalVolume / 1000000000).toFixed(2)}B` :
+          kpiStats.totalVolume >= 1000000 ? 
+          `${(kpiStats.totalVolume / 1000000).toFixed(1)}M` : 
+          kpiStats.totalVolume >= 1000 ?
+          `${(kpiStats.totalVolume / 1000).toFixed(1)}K` :
+          kpiStats.totalVolume.toLocaleString()) : "0",
+      trend: kpiStats ? {
+        value: kpiStats.totalVolume > 0 
+          ? Math.round((kpiStats.totalVolume24h / kpiStats.totalVolume) * 100) 
+          : 0,
+        isPositive: true
+      } : undefined,
       icon: Sparkles,
     },
   ];
@@ -375,7 +399,7 @@ export default function Overview() {
           <Card className="gradient-card border-border">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg">Events Over Time</CardTitle>
-              <p className="text-sm text-muted-foreground">Last 24 hours (2-hour intervals)</p>
+              <p className="text-sm text-muted-foreground">All-time analytics with zoom controls</p>
             </CardHeader>
             <CardContent>
               <EventsOverTimeChart events={events} />

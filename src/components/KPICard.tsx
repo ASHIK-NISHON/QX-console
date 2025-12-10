@@ -36,7 +36,7 @@ export function KPICard({ title, value, trend, icon: Icon }: KPICardProps) {
                     </span>
                   </>
                 )}
-                <span className="text-muted-foreground ml-1">vs yesterday</span>
+                <span className="text-muted-foreground ml-1">in last 24h</span>
               </div>
             )}
           </div>

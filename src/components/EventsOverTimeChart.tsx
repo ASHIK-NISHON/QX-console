@@ -14,14 +14,20 @@ interface EventsOverTimeChartProps {
 
 interface TimeSlot {
   hour: string;
+  dateLabel: string;
   total: number;
   bidOrders: number;
   askOrders: number;
   transfers: number;
   issues: number;
   cancels: number;
+  other: number;
   volume: number;
+  startTime: Date;
+  endTime: Date;
 }
+
+type TimeRange = "all" | "7d" | "24h" | "12h" | "6h" | "1h";
 
 const ACTION_COLORS = {
   bidOrders: "from-emerald-500 to-emerald-400",
@@ -42,15 +48,95 @@ const ACTION_LABELS = {
 export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
   const [hoveredSlot, setHoveredSlot] = useState<number | null>(null);
   const [selectedView, setSelectedView] = useState<"activity" | "volume">("activity");
+  const [timeRange, setTimeRange] = useState<TimeRange>("all");
+
+  // Get the oldest and newest event timestamps
+  const { oldestTime, newestTime } = useMemo(() => {
+    if (events.length === 0) {
+      const now = new Date();
+      return { oldestTime: now, newestTime: now };
+    }
+    const timestamps = events.map((e) => new Date(e.timestamp).getTime());
+    return {
+      oldestTime: new Date(Math.min(...timestamps)),
+      newestTime: new Date(Math.max(...timestamps)),
+    };
+  }, [events]);
 
   const timeSlots = useMemo(() => {
     const slots: TimeSlot[] = [];
     const now = new Date();
+    let startTime: Date;
+    let endTime: Date = now;
+    let slotCount: number;
+    let slotDuration: number; // in milliseconds
 
-    // Create 12 time slots for last 24 hours (2-hour intervals)
-    for (let i = 11; i >= 0; i--) {
-      const slotEnd = new Date(now.getTime() - i * 2 * 60 * 60 * 1000);
-      const slotStart = new Date(slotEnd.getTime() - 2 * 60 * 60 * 1000);
+    // Calculate time range based on selection
+    if (timeRange === "all") {
+      startTime = oldestTime;
+      endTime = newestTime;
+      const totalDuration = endTime.getTime() - startTime.getTime();
+      
+      // Determine slot count and duration based on total time range
+      if (totalDuration <= 24 * 60 * 60 * 1000) {
+        // Less than 24 hours: use 1-hour slots
+        slotDuration = 60 * 60 * 1000;
+        slotCount = Math.max(12, Math.ceil(totalDuration / slotDuration));
+      } else if (totalDuration <= 7 * 24 * 60 * 60 * 1000) {
+        // Less than 7 days: use 6-hour slots
+        slotDuration = 6 * 60 * 60 * 1000;
+        slotCount = Math.max(12, Math.ceil(totalDuration / slotDuration));
+      } else if (totalDuration <= 30 * 24 * 60 * 60 * 1000) {
+        // Less than 30 days: use 1-day slots
+        slotDuration = 24 * 60 * 60 * 1000;
+        slotCount = Math.max(12, Math.ceil(totalDuration / slotDuration));
+      } else {
+        // More than 30 days: use 7-day slots
+        slotDuration = 7 * 24 * 60 * 60 * 1000;
+        slotCount = Math.max(12, Math.ceil(totalDuration / slotDuration));
+      }
+    } else {
+      // Preset ranges
+      const rangeMap: Record<TimeRange, number> = {
+        "1h": 60 * 60 * 1000,
+        "6h": 6 * 60 * 60 * 1000,
+        "12h": 12 * 60 * 60 * 1000,
+        "24h": 24 * 60 * 60 * 1000,
+        "7d": 7 * 24 * 60 * 60 * 1000,
+        "all": 0,
+      };
+      
+      const rangeDuration = rangeMap[timeRange];
+      startTime = new Date(now.getTime() - rangeDuration);
+      endTime = now;
+      
+      // Determine slot count and duration based on range
+      if (timeRange === "1h") {
+        slotCount = 12;
+        slotDuration = 5 * 60 * 1000; // 5-minute slots
+      } else if (timeRange === "6h") {
+        slotCount = 12;
+        slotDuration = 30 * 60 * 1000; // 30-minute slots
+      } else if (timeRange === "12h") {
+        slotCount = 12;
+        slotDuration = 60 * 60 * 1000; // 1-hour slots
+      } else if (timeRange === "24h") {
+        slotCount = 12;
+        slotDuration = 2 * 60 * 60 * 1000; // 2-hour slots
+      } else {
+        slotCount = 7;
+        slotDuration = 24 * 60 * 60 * 1000; // 1-day slots
+      }
+    }
+
+    // Use calculated slot count and duration
+    const effectiveSlotCount = slotCount;
+    const effectiveSlotDuration = slotDuration;
+
+    // Create time slots
+    for (let i = effectiveSlotCount - 1; i >= 0; i--) {
+      const slotEnd = new Date(endTime.getTime() - i * effectiveSlotDuration);
+      const slotStart = new Date(slotEnd.getTime() - effectiveSlotDuration);
 
       const slotEvents = events.filter((event) => {
         const eventTime = new Date(event.timestamp);
@@ -64,23 +150,58 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
       const cancels = slotEvents.filter(
         (e) => e.type === "RemoveFromAskOrder" || e.type === "RemoveFromBidOrder"
       ).length;
+      
+      // Count other event types
+      const categorizedCount = bidOrders + askOrders + transfers + issues + cancels;
+      const other = slotEvents.length - categorizedCount;
 
       const volume = slotEvents.reduce((acc, e) => acc + parseAmount(e.amount), 0);
+      const total = bidOrders + askOrders + transfers + issues + cancels + other;
+
+      // Format time label based on range
+      let hourLabel: string;
+      let dateLabel: string;
+      
+      if (timeRange === "all" && slotDuration >= 7 * 24 * 60 * 60 * 1000) {
+        // Weekly slots
+        hourLabel = slotEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        dateLabel = `${slotStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${slotEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+      } else if (timeRange === "all" && slotDuration >= 24 * 60 * 60 * 1000) {
+        // Daily slots
+        hourLabel = slotEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        dateLabel = slotEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      } else if (slotDuration >= 24 * 60 * 60 * 1000) {
+        // Daily slots
+        hourLabel = slotEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        dateLabel = slotEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      } else if (slotDuration >= 60 * 60 * 1000) {
+        // Hourly slots
+        hourLabel = slotEnd.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+        dateLabel = slotEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      } else {
+        // Minute slots
+        hourLabel = slotEnd.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+        dateLabel = slotEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      }
 
       slots.push({
-        hour: slotEnd.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
-        total: slotEvents.length,
+        hour: hourLabel,
+        dateLabel,
+        total,
         bidOrders,
         askOrders,
         transfers,
         issues,
         cancels,
+        other,
         volume,
+        startTime: slotStart,
+        endTime: slotEnd,
       });
     }
 
     return slots;
-  }, [events]);
+  }, [events, timeRange, oldestTime, newestTime]);
 
   const maxTotal = Math.max(...timeSlots.map((s) => s.total), 1);
   const maxVolume = Math.max(...timeSlots.map((s) => s.volume), 1);
@@ -88,11 +209,15 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
   const totalActivity = timeSlots.reduce((acc, s) => acc + s.total, 0);
   const totalBids = timeSlots.reduce((acc, s) => acc + s.bidOrders, 0);
   const totalAsks = timeSlots.reduce((acc, s) => acc + s.askOrders, 0);
+  const totalTransfers = timeSlots.reduce((acc, s) => acc + s.transfers, 0);
+  const totalIssues = timeSlots.reduce((acc, s) => acc + s.issues, 0);
+  const totalCancels = timeSlots.reduce((acc, s) => acc + s.cancels, 0);
+  const totalOther = timeSlots.reduce((acc, s) => acc + s.other, 0);
 
   return (
     <div className="space-y-4">
-      {/* View Toggle */}
-      <div className="flex items-center justify-between">
+      {/* Controls */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex gap-2">
           <button
             onClick={() => setSelectedView("activity")}
@@ -115,8 +240,25 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
             Volume
           </button>
         </div>
+
+        {/* Time Range Selector */}
+        <div className="flex items-center gap-2">
+          <select
+            value={timeRange}
+            onChange={(e) => setTimeRange(e.target.value as TimeRange)}
+            className="px-2 py-1.5 text-xs rounded-md bg-background/50 border border-border text-foreground hover:bg-background/80 transition-colors"
+          >
+            <option value="all">All Time</option>
+            <option value="7d">Last 7 Days</option>
+            <option value="24h">Last 24 Hours</option>
+            <option value="12h">Last 12 Hours</option>
+            <option value="6h">Last 6 Hours</option>
+            <option value="1h">Last 1 Hour</option>
+          </select>
+        </div>
+
         <div className="text-xs text-muted-foreground">
-          {totalActivity} events
+          {totalActivity.toLocaleString()} events
         </div>
       </div>
 
@@ -144,6 +286,7 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
             const transferHeight = slot.total > 0 ? (slot.transfers / slot.total) * heightPercent : 0;
             const issueHeight = slot.total > 0 ? (slot.issues / slot.total) * heightPercent : 0;
             const cancelHeight = slot.total > 0 ? (slot.cancels / slot.total) * heightPercent : 0;
+            const otherHeight = slot.total > 0 ? (slot.other / slot.total) * heightPercent : 0;
 
             return (
               <Tooltip key={idx}>
@@ -198,6 +341,12 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
                               style={{ height: `${(cancelHeight / heightPercent) * 100}%` }}
                             />
                           )}
+                          {otherHeight > 0 && (
+                            <div
+                              className="w-full bg-gradient-to-t from-gray-500 to-gray-400 transition-all duration-300"
+                              style={{ height: `${(otherHeight / heightPercent) * 100}%` }}
+                            />
+                          )}
                         </div>
                       </div>
                     ) : (
@@ -225,54 +374,102 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
                 </TooltipTrigger>
                 <TooltipContent
                   side="top"
-                  className="bg-card border-border p-3 shadow-xl"
+                  className="bg-card border-border p-4 shadow-xl max-w-xs"
                 >
-                  <div className="space-y-2">
-                    <div className="font-semibold text-foreground border-b border-border pb-1 mb-2">
-                      {slot.hour}
+                  <div className="space-y-3">
+                    <div className="font-semibold text-base text-foreground border-b border-border pb-2 mb-3">
+                      <div>{slot.hour}</div>
+                      {slot.dateLabel !== slot.hour && (
+                        <div className="text-xs text-muted-foreground font-normal mt-1">{slot.dateLabel}</div>
+                      )}
                     </div>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400"></span>
-                        <span className="text-muted-foreground">Bids:</span>
-                        <span className="font-medium text-foreground">{slot.bidOrders}</span>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400"></span>
+                          <span className="text-sm text-muted-foreground">Bid Orders:</span>
+                        </div>
+                        <span className="font-semibold text-foreground">{slot.bidOrders.toLocaleString()}</span>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-gradient-to-r from-rose-500 to-rose-400"></span>
-                        <span className="text-muted-foreground">Asks:</span>
-                        <span className="font-medium text-foreground">{slot.askOrders}</span>
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-full bg-gradient-to-r from-rose-500 to-rose-400"></span>
+                          <span className="text-sm text-muted-foreground">Ask Orders:</span>
+                        </div>
+                        <span className="font-semibold text-foreground">{slot.askOrders.toLocaleString()}</span>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-gradient-to-r from-violet-500 to-violet-400"></span>
-                        <span className="text-muted-foreground">Transfers:</span>
-                        <span className="font-medium text-foreground">{slot.transfers}</span>
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-full bg-gradient-to-r from-violet-500 to-violet-400"></span>
+                          <span className="text-sm text-muted-foreground">Transfers:</span>
+                        </div>
+                        <span className="font-semibold text-foreground">{slot.transfers.toLocaleString()}</span>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-gradient-to-r from-amber-500 to-amber-400"></span>
-                        <span className="text-muted-foreground">Issues:</span>
-                        <span className="font-medium text-foreground">{slot.issues}</span>
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-full bg-gradient-to-r from-amber-500 to-amber-400"></span>
+                          <span className="text-sm text-muted-foreground">Issue Assets:</span>
+                        </div>
+                        <span className="font-semibold text-foreground">{slot.issues.toLocaleString()}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 col-span-2">
-                        <span className="w-2 h-2 rounded-full bg-gradient-to-r from-slate-500 to-slate-400"></span>
-                        <span className="text-muted-foreground">Cancels:</span>
-                        <span className="font-medium text-foreground">{slot.cancels}</span>
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-full bg-gradient-to-r from-slate-500 to-slate-400"></span>
+                          <span className="text-sm text-muted-foreground">Cancellations:</span>
+                        </div>
+                        <span className="font-semibold text-foreground">{slot.cancels.toLocaleString()}</span>
                       </div>
+                      {slot.other > 0 && (
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-full bg-gradient-to-r from-gray-500 to-gray-400"></span>
+                            <span className="text-sm text-muted-foreground">Other:</span>
+                          </div>
+                          <span className="font-semibold text-foreground">{slot.other.toLocaleString()}</span>
+                        </div>
+                      )}
                     </div>
-                    <div className="border-t border-border pt-2 mt-2">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">Total:</span>
-                        <span className="font-semibold text-foreground">{slot.total} events</span>
+                    <div className="border-t border-border pt-3 mt-3 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-muted-foreground">Total Events:</span>
+                        <span className="font-bold text-lg text-foreground">{slot.total.toLocaleString()}</span>
                       </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">Volume:</span>
-                        <span className="font-semibold text-primary">
-                          {slot.volume >= 1000000
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-muted-foreground">Total Volume:</span>
+                        <span className="font-bold text-lg text-primary">
+                          {slot.volume >= 1000000000
+                            ? `${(slot.volume / 1000000000).toFixed(3)}B`
+                            : slot.volume >= 1000000
                             ? `${(slot.volume / 1000000).toFixed(2)}M`
                             : slot.volume >= 1000
                             ? `${(slot.volume / 1000).toFixed(1)}K`
                             : slot.volume.toLocaleString()}
                         </span>
                       </div>
+                      {slot.total > 0 && (
+                        <div className="pt-2 border-t border-border/50">
+                          <div className="text-xs text-muted-foreground space-y-1">
+                            <div className="flex justify-between">
+                              <span>Bids:</span>
+                              <span className="font-medium">{((slot.bidOrders / slot.total) * 100).toFixed(1)}%</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Asks:</span>
+                              <span className="font-medium">{((slot.askOrders / slot.total) * 100).toFixed(1)}%</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Transfers:</span>
+                              <span className="font-medium">{((slot.transfers / slot.total) * 100).toFixed(1)}%</span>
+                            </div>
+                            {slot.other > 0 && (
+                              <div className="flex justify-between">
+                                <span>Other:</span>
+                                <span className="font-medium">{((slot.other / slot.total) * 100).toFixed(1)}%</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </TooltipContent>
@@ -282,11 +479,17 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
         </div>
       </TooltipProvider>
 
-      {/* Time labels */}
+      {/* Time labels - Show key time slots */}
       <div className="flex justify-between text-[10px] text-muted-foreground px-0.5">
-        <span>{timeSlots[0]?.hour || ""}</span>
-        <span>{timeSlots[5]?.hour || ""}</span>
-        <span>{timeSlots[11]?.hour || ""}</span>
+        {timeSlots.length > 0 && (
+          <>
+            <span>{timeSlots[0]?.hour || ""}</span>
+            {timeSlots.length > 4 && <span>{timeSlots[Math.floor(timeSlots.length / 4)]?.hour || ""}</span>}
+            {timeSlots.length > 2 && <span>{timeSlots[Math.floor(timeSlots.length / 2)]?.hour || ""}</span>}
+            {timeSlots.length > 4 && <span>{timeSlots[Math.floor(timeSlots.length * 3 / 4)]?.hour || ""}</span>}
+            <span>{timeSlots[timeSlots.length - 1]?.hour || ""}</span>
+          </>
+        )}
       </div>
 
       {/* Legend */}
@@ -303,19 +506,55 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
         ))}
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-3 gap-2 pt-2">
-        <div className="bg-background/30 rounded-lg p-2 text-center border border-border/30">
-          <div className="text-lg font-bold text-emerald-500 animate-fade-in">{totalBids}</div>
-          <div className="text-[10px] text-muted-foreground">Bid Orders</div>
+      {/* Quick Stats - Enhanced with all categories */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 pt-2">
+        <div className="bg-background/30 rounded-md p-2 text-center border border-border/30 hover:border-emerald-500/30 hover:shadow-md hover:shadow-emerald-500/10 transition-all">
+          <div className="text-lg font-bold text-emerald-500 animate-fade-in">{totalBids.toLocaleString()}</div>
+          <div className="text-[9px] text-muted-foreground mt-0.5 font-medium">Bid Orders</div>
         </div>
-        <div className="bg-background/30 rounded-lg p-2 text-center border border-border/30">
-          <div className="text-lg font-bold text-rose-500 animate-fade-in">{totalAsks}</div>
-          <div className="text-[10px] text-muted-foreground">Ask Orders</div>
+        <div className="bg-background/30 rounded-md p-2 text-center border border-border/30 hover:border-rose-500/30 hover:shadow-md hover:shadow-rose-500/10 transition-all">
+          <div className="text-lg font-bold text-rose-500 animate-fade-in">{totalAsks.toLocaleString()}</div>
+          <div className="text-[9px] text-muted-foreground mt-0.5 font-medium">Ask Orders</div>
         </div>
-        <div className="bg-background/30 rounded-lg p-2 text-center border border-border/30">
-          <div className="text-lg font-bold text-primary animate-fade-in">{totalActivity}</div>
-          <div className="text-[10px] text-muted-foreground">Total</div>
+        <div className="bg-background/30 rounded-md p-2 text-center border border-border/30 hover:border-violet-500/30 hover:shadow-md hover:shadow-violet-500/10 transition-all">
+          <div className="text-lg font-bold text-violet-500 animate-fade-in">{totalTransfers.toLocaleString()}</div>
+          <div className="text-[9px] text-muted-foreground mt-0.5 font-medium">Transfers</div>
+        </div>
+        <div className="bg-background/30 rounded-md p-2 text-center border border-border/30 hover:border-amber-500/30 hover:shadow-md hover:shadow-amber-500/10 transition-all">
+          <div className="text-lg font-bold text-amber-500 animate-fade-in">{totalIssues.toLocaleString()}</div>
+          <div className="text-[9px] text-muted-foreground mt-0.5 font-medium">Issues</div>
+        </div>
+        <div className="bg-background/30 rounded-md p-2 text-center border border-border/30 hover:border-slate-500/30 hover:shadow-md hover:shadow-slate-500/10 transition-all">
+          <div className="text-lg font-bold text-slate-400 animate-fade-in">{totalCancels.toLocaleString()}</div>
+          <div className="text-[9px] text-muted-foreground mt-0.5 font-medium">Cancels</div>
+        </div>
+        {totalOther > 0 && (
+          <div className="bg-background/30 rounded-md p-2 text-center border border-border/30 hover:border-gray-500/30 hover:shadow-md hover:shadow-gray-500/10 transition-all">
+            <div className="text-lg font-bold text-gray-400 animate-fade-in">{totalOther.toLocaleString()}</div>
+            <div className="text-[9px] text-muted-foreground mt-0.5 font-medium">Other</div>
+          </div>
+        )}
+        <div className={`bg-background/40 rounded-md p-2 text-center border-2 border-primary/30 hover:border-primary/50 hover:shadow-md hover:shadow-primary/20 transition-all ${totalOther > 0 ? 'sm:col-span-2 lg:col-span-1' : 'sm:col-span-3 lg:col-span-1'}`}>
+          <div className="text-lg font-bold text-primary animate-fade-in">{totalActivity.toLocaleString()}</div>
+          <div className="text-[9px] text-muted-foreground mt-0.5 font-semibold">Total Events</div>
+        </div>
+      </div>
+      
+      {/* Volume Summary */}
+      <div className="mt-3 pt-3 border-t border-border/50">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">
+            Total Volume {timeRange === "all" ? "(All Time)" : `(${timeRange.toUpperCase()})`}:
+          </span>
+          <span className="text-lg font-bold text-primary">
+            {timeSlots.reduce((acc, s) => acc + s.volume, 0) >= 1000000000
+              ? `${(timeSlots.reduce((acc, s) => acc + s.volume, 0) / 1000000000).toFixed(3)}B`
+              : timeSlots.reduce((acc, s) => acc + s.volume, 0) >= 1000000
+              ? `${(timeSlots.reduce((acc, s) => acc + s.volume, 0) / 1000000).toFixed(2)}M`
+              : timeSlots.reduce((acc, s) => acc + s.volume, 0) >= 1000
+              ? `${(timeSlots.reduce((acc, s) => acc + s.volume, 0) / 1000).toFixed(1)}K`
+              : timeSlots.reduce((acc, s) => acc + s.volume, 0).toLocaleString()}
+          </span>
         </div>
       </div>
     </div>
