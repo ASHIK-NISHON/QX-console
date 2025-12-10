@@ -50,25 +50,42 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
   const [selectedView, setSelectedView] = useState<"activity" | "volume">("activity");
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
 
-  // Safely parse timestamps (supports seconds or milliseconds)
+  // Safely parse timestamps (supports raw ms, seconds, numeric strings, and "YYYY-MM-DD HH:mm:ss")
   const getEventDate = (evt: DisplayEvent) => {
-    let raw: number;
-    if (typeof evt.timestamp === "number") {
-      raw = evt.timestamp;
-    } else {
-      // Handle ISO strings, numeric strings, or other string formats
-      const parsed = Number(evt.timestamp);
-      raw = Number.isFinite(parsed) ? parsed : Date.parse(evt.timestamp);
+    // Prefer raw millisecond timestamp when provided
+    if (typeof (evt as any).timestampMs === "number" && Number.isFinite((evt as any).timestampMs)) {
+      return new Date((evt as any).timestampMs);
     }
 
-    // Fallback: if still invalid, use now to avoid filtering everything out
-    if (!Number.isFinite(raw)) {
-      return new Date();
+    // Next, try numeric timestamp in the timestamp field
+    if (typeof evt.timestamp === "number" && Number.isFinite(evt.timestamp)) {
+      const ms = evt.timestamp < 1e12 ? evt.timestamp * 1000 : evt.timestamp;
+      return new Date(ms);
     }
 
-    // If in seconds (10 digits), convert to ms
-    const ms = raw < 1e12 ? raw * 1000 : raw;
-    return new Date(ms);
+    // If timestamp is a string, normalize and parse
+    if (typeof evt.timestamp === "string") {
+      // Try numeric string first
+      const numeric = Number(evt.timestamp);
+      if (Number.isFinite(numeric)) {
+        const ms = numeric < 1e12 ? numeric * 1000 : numeric;
+        return new Date(ms);
+      }
+
+      // Handle "YYYY-MM-DD HH:mm:ss" by converting to ISO
+      const normalized =
+        evt.timestamp.includes(" ") && !evt.timestamp.includes("T")
+          ? `${evt.timestamp.replace(" ", "T")}Z`
+          : evt.timestamp;
+
+      const parsed = Date.parse(normalized);
+      if (!Number.isNaN(parsed)) {
+        return new Date(parsed);
+      }
+    }
+
+    // Fallback: now (avoids dropping events if format is unexpected)
+    return new Date();
   };
 
   // Get the oldest and newest event timestamps

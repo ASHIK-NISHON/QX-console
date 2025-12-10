@@ -38,6 +38,8 @@ export interface DisplayEvent {
   amount: string; // formatted amount
   time: string; // relative time
   timestamp: string; // formatted timestamp
+  timestampMs?: number; // raw timestamp in milliseconds for calculations
+  createdAt?: string; // original created_at for reference
   tickNo: string; // formatted tick number
   label?: string;
   // Additional details from raw data
@@ -96,6 +98,8 @@ export function transformEvent(dbEvent: QxEventDB): DisplayEvent {
     amount: formatAmount(dbEvent.amount, token),
     time: getRelativeTime(dbEvent.timestamp),
     timestamp: formatTimestamp(dbEvent.timestamp),
+    timestampMs: dbEvent.timestamp,
+    createdAt: dbEvent.created_at,
     tickNo: formatTickNo(dbEvent.tick_number),
     price: dbEvent.price ?? undefined,
     numberOfShares: dbEvent.number_of_shares ?? undefined,
