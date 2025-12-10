@@ -27,7 +27,7 @@ interface TimeSlot {
   endTime: Date;
 }
 
-type TimeRange = "all" | "30d" | "7d" | "24h" | "12h" | "6h" | "1h";
+type TimeRange = "all" | "7d" | "24h" | "12h" | "6h" | "1h";
 
 const ACTION_COLORS = {
   bidOrders: "from-emerald-500 to-emerald-400",
@@ -103,7 +103,6 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
         "12h": 12 * 60 * 60 * 1000,
         "24h": 24 * 60 * 60 * 1000,
         "7d": 7 * 24 * 60 * 60 * 1000,
-        "30d": 30 * 24 * 60 * 60 * 1000,
         "all": 0,
       };
       
@@ -124,12 +123,6 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
       } else if (timeRange === "24h") {
         slotCount = 12;
         slotDuration = 2 * 60 * 60 * 1000; // 2-hour slots
-      } else if (timeRange === "7d") {
-        slotCount = 14;
-        slotDuration = 12 * 60 * 60 * 1000; // 12-hour slots
-      } else if (timeRange === "30d") {
-        slotCount = 30;
-        slotDuration = 24 * 60 * 60 * 1000; // 1-day slots
       } else {
         slotCount = 7;
         slotDuration = 24 * 60 * 60 * 1000; // 1-day slots
@@ -256,7 +249,6 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
             className="px-2 py-1.5 text-xs rounded-md bg-background/50 border border-border text-foreground hover:bg-background/80 transition-colors"
           >
             <option value="all">All Time</option>
-            <option value="30d">Last 30 Days</option>
             <option value="7d">Last 7 Days</option>
             <option value="24h">Last 24 Hours</option>
             <option value="12h">Last 12 Hours</option>
@@ -555,20 +547,7 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
       <div className="mt-3 pt-3 border-t border-border/50">
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">
-            Total Volume{" "}
-            {timeRange === "all"
-              ? "(All Time)"
-              : timeRange === "30d"
-              ? "(Last 30 Days)"
-              : timeRange === "7d"
-              ? "(Last 7 Days)"
-              : timeRange === "24h"
-              ? "(Last 24 Hours)"
-              : timeRange === "12h"
-              ? "(Last 12 Hours)"
-              : timeRange === "6h"
-              ? "(Last 6 Hours)"
-              : "(Last 1 Hour)"}:
+            Total Volume {timeRange === "all" ? "(All Time)" : `(${timeRange.toUpperCase()})`}:
           </span>
           <span className="text-lg font-bold text-primary">
             {timeSlots.reduce((acc, s) => acc + s.volume, 0) >= 1000000000
