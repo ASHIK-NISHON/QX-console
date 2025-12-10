@@ -374,7 +374,10 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
                 </TooltipTrigger>
                 <TooltipContent
                   side="top"
-                  className="bg-card border-border p-4 shadow-xl max-w-xs"
+                  align="center"
+                  sideOffset={10}
+                  collisionPadding={16}
+                  className="bg-card border-border p-4 shadow-xl max-w-[260px] whitespace-normal break-words"
                 >
                   <div className="space-y-3">
                     <div className="font-semibold text-base text-foreground border-b border-border pb-2 mb-3">
