@@ -70,7 +70,8 @@ export default function Overview() {
   const prevWhaleCountRef = useRef<number | null>(null);
   const uniqueTokens = useUniqueTokens();
 
-  const { data: events = [], isLoading: eventsLoading } = useQxEvents(50);
+  // Fetch more events so the all-time chart aligns with KPI totals
+  const { data: events = [], isLoading: eventsLoading } = useQxEvents(1000);
   const { data: kpiStats } = useKPIStats();
 
   // Detect whale events
