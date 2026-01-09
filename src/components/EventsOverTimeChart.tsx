@@ -21,6 +21,7 @@ interface TimeSlot {
   transfers: number;
   issues: number;
   cancels: number;
+  mgmtTransfers: number;
   other: number;
   volume: number;
   startTime: Date;
@@ -35,6 +36,7 @@ const ACTION_COLORS = {
   transfers: "from-violet-500 to-violet-400",
   issues: "from-amber-500 to-amber-400",
   cancels: "from-slate-500 to-slate-400",
+  mgmtTransfers: "from-cyan-500 to-cyan-400",
 };
 
 const ACTION_LABELS = {
@@ -43,12 +45,22 @@ const ACTION_LABELS = {
   transfers: "Transfers",
   issues: "Issue Assets",
   cancels: "Cancellations",
+  mgmtTransfers: "Mgmt Transfers",
 };
 
 export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
   const [hoveredSlot, setHoveredSlot] = useState<number | null>(null);
   const [selectedView, setSelectedView] = useState<"activity" | "volume">("activity");
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
+
+  // Debug: Count event types and total
+  if (events.length > 0) {
+    const typeCounts = new Map<string, number>();
+    events.forEach((e) => {
+      typeCounts.set(e.type, (typeCounts.get(e.type) || 0) + 1);
+    });
+    console.log(`Chart received ${events.length} events. Types:`, Array.from(typeCounts.entries()));
+  }
 
   // Safely parse timestamps (supports raw ms, seconds, numeric strings, and "YYYY-MM-DD HH:mm:ss")
   const getEventDate = (evt: DisplayEvent) => {
@@ -94,10 +106,20 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
       const now = new Date();
       return { oldestTime: now, newestTime: now };
     }
-    const timestamps = events.map((e) => getEventDate(e).getTime());
+    
+    const validTimestamps = events
+      .map((e) => ({ evt: e, time: getEventDate(e).getTime() }))
+      .filter(x => Number.isFinite(x.time) && x.time > 0)
+      .map(x => x.time);
+    
+    if (validTimestamps.length === 0) {
+      const now = new Date();
+      return { oldestTime: now, newestTime: now };
+    }
+    
     return {
-      oldestTime: new Date(Math.min(...timestamps)),
-      newestTime: new Date(Math.max(...timestamps)),
+      oldestTime: new Date(Math.min(...validTimestamps)),
+      newestTime: new Date(Math.max(...validTimestamps)),
     };
   }, [events]);
 
@@ -178,6 +200,12 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
 
       const slotEvents = events.filter((event) => {
         const eventTime = getEventDate(event);
+        // Include events that fall within the slot. For the final (most recent) slot
+        // include events exactly equal to the slot end to avoid dropping the newest
+        // event due to an exclusive end boundary.
+        if (i === 0) {
+          return eventTime >= slotStart && eventTime <= slotEnd;
+        }
         return eventTime >= slotStart && eventTime < slotEnd;
       });
 
@@ -188,13 +216,14 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
       const cancels = slotEvents.filter(
         (e) => e.type === "RemoveFromAskOrder" || e.type === "RemoveFromBidOrder"
       ).length;
+      const mgmtTransfers = slotEvents.filter((e) => e.type === "TransferShareManagementRights").length;
       
       // Count other event types
-      const categorizedCount = bidOrders + askOrders + transfers + issues + cancels;
+      const categorizedCount = bidOrders + askOrders + transfers + issues + cancels + mgmtTransfers;
       const other = slotEvents.length - categorizedCount;
 
       const volume = slotEvents.reduce((acc, e) => acc + parseAmount(e.amount), 0);
-      const total = bidOrders + askOrders + transfers + issues + cancels + other;
+      const total = bidOrders + askOrders + transfers + issues + cancels + mgmtTransfers + other;
 
       // Format time label based on range
       let hourLabel: string;
@@ -231,6 +260,7 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
         transfers,
         issues,
         cancels,
+        mgmtTransfers,
         other,
         volume,
         startTime: slotStart,
@@ -250,7 +280,12 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
   const totalTransfers = timeSlots.reduce((acc, s) => acc + s.transfers, 0);
   const totalIssues = timeSlots.reduce((acc, s) => acc + s.issues, 0);
   const totalCancels = timeSlots.reduce((acc, s) => acc + s.cancels, 0);
+  const totalMgmtTransfers = timeSlots.reduce((acc, s) => acc + s.mgmtTransfers, 0);
   const totalOther = timeSlots.reduce((acc, s) => acc + s.other, 0);
+
+  // Debug: Log the totals to see if they add up
+  console.log(`Chart totals - Bids: ${totalBids}, Asks: ${totalAsks}, Transfers: ${totalTransfers}, Issues: ${totalIssues}, Cancels: ${totalCancels}, MgmtTransfers: ${totalMgmtTransfers}, Other: ${totalOther}, Total: ${totalActivity} (Events received: ${events.length})`);
+
 
   return (
     <div className="space-y-4">
@@ -324,6 +359,7 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
             const transferHeight = slot.total > 0 ? (slot.transfers / slot.total) * heightPercent : 0;
             const issueHeight = slot.total > 0 ? (slot.issues / slot.total) * heightPercent : 0;
             const cancelHeight = slot.total > 0 ? (slot.cancels / slot.total) * heightPercent : 0;
+            const mgmtTransferHeight = slot.total > 0 ? (slot.mgmtTransfers / slot.total) * heightPercent : 0;
             const otherHeight = slot.total > 0 ? (slot.other / slot.total) * heightPercent : 0;
 
             return (
@@ -377,6 +413,12 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
                             <div
                               className={`w-full bg-gradient-to-t ${ACTION_COLORS.cancels} transition-all duration-300`}
                               style={{ height: `${(cancelHeight / heightPercent) * 100}%` }}
+                            />
+                          )}
+                          {mgmtTransferHeight > 0 && (
+                            <div
+                              className={`w-full bg-gradient-to-t ${ACTION_COLORS.mgmtTransfers} transition-all duration-300`}
+                              style={{ height: `${(mgmtTransferHeight / heightPercent) * 100}%` }}
                             />
                           )}
                           {otherHeight > 0 && (
@@ -459,6 +501,13 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
                           <span className="text-sm text-muted-foreground">Cancellations:</span>
                         </div>
                         <span className="font-semibold text-foreground">{slot.cancels.toLocaleString()}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-full bg-gradient-to-r from-cyan-500 to-cyan-400"></span>
+                          <span className="text-sm text-muted-foreground">Mgmt Transfers:</span>
+                        </div>
+                        <span className="font-semibold text-foreground">{slot.mgmtTransfers.toLocaleString()}</span>
                       </div>
                       {slot.other > 0 && (
                         <div className="flex items-center justify-between gap-4">
@@ -568,6 +617,10 @@ export function EventsOverTimeChart({ events }: EventsOverTimeChartProps) {
         <div className="bg-background/20 rounded border border-border/40 px-2 py-1.5">
           <div className="text-base font-bold text-slate-400">{totalCancels.toLocaleString()}</div>
           <div className="text-[9px] text-muted-foreground">Cancels</div>
+        </div>
+        <div className="bg-background/20 rounded border border-border/40 px-2 py-1.5">
+          <div className="text-base font-bold text-cyan-400">{totalMgmtTransfers.toLocaleString()}</div>
+          <div className="text-[9px] text-muted-foreground">Mgmt Transfers</div>
         </div>
         {totalOther > 0 && (
           <div className="bg-background/20 rounded border border-border/40 px-2 py-1.5">

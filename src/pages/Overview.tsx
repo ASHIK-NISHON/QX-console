@@ -401,7 +401,7 @@ export default function Overview() {
           <Card className="gradient-card border-border">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg">Events Over Time</CardTitle>
-              <p className="text-sm text-muted-foreground">All-time analytics with zoom controls</p>
+              <p className="text-sm text-muted-foreground">Track event patterns over time</p>
             </CardHeader>
             <CardContent>
               <EventsOverTimeChart events={events} />

@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -18,11 +19,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, ArrowUpRight, ArrowDownRight, Loader2 } from "lucide-react";
+import { Search, ArrowUpRight, ArrowDownRight, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { shortenAddress } from "@/data/events";
 import { EventDetailDialog } from "@/components/EventDetailDialog";
 import { useWhaleDetection, parseAmount } from "@/hooks/useWhaleDetection";
-import { useQxEvents } from "@/hooks/useQxEvents";
+import { useQxEvents, useSearchQxEvents, useTotalEventsCount, useFilteredEventsCount } from "@/hooks/useQxEvents";
 import { useUniqueTokens } from "@/hooks/useUniqueTokens";
 import { DisplayEvent } from "@/types/qxEvent";
 
@@ -61,67 +62,50 @@ export default function Events() {
   const [tokenFilter, setTokenFilter] = useState("all-tokens");
   const [typeFilter, setTypeFilter] = useState("all-types");
   const [timeFilter, setTimeFilter] = useState("all");
+  const [pageIndex, setPageIndex] = useState(0);
   const { isWhale } = useWhaleDetection();
   const uniqueTokens = useUniqueTokens();
 
-  const { data: events = [], isLoading } = useQxEvents(200);
+  const pageSize = 50;
 
+  // Detect whale helper function
   const detectWhaleInEvent = (event: DisplayEvent): boolean => {
     const amount = parseAmount(event.amount);
     return isWhale(event.token, amount);
   };
 
-  const handleEventClick = (event: DisplayEvent) => {
-    setSelectedEvent(event);
-    setDialogOpen(true);
-  };
+  // Check if user is searching or filtering
+  const hasSearchOrFilter = searchQuery.trim() || tokenFilter !== 'all-tokens' || typeFilter !== 'all-types';
+  
+  // Whale filter is client-side only, so we shouldn't use search hook for it
+  const hasServerFilter = searchQuery.trim() || tokenFilter !== 'all-tokens' || (typeFilter !== 'all-types' && typeFilter !== 'whale');
 
-  // Filter events based on search and filters
+  // Get counts
+  const { data: totalCount = 0, isLoading: countLoading } = useTotalEventsCount();
+  const { data: filteredCount = 0 } = useFilteredEventsCount(searchQuery, tokenFilter, typeFilter !== 'whale' ? typeFilter : 'all-types');
+
+  // Get events - use search hook only for server-side filters, whale is client-side
+  const paginationResults = useQxEvents(pageSize);
+  const searchResults = useSearchQxEvents(searchQuery, tokenFilter, typeFilter !== 'whale' ? typeFilter : 'all-types', pageIndex, pageSize);
+
+  // Choose which data to use
+  const { data: events = [], isLoading } = hasServerFilter ? searchResults : paginationResults;
+
+  // Reset page to 0 when filters change
+  useEffect(() => {
+    setPageIndex(0);
+  }, [searchQuery, tokenFilter, typeFilter]);
+
+  // Filter events based on time and whale filters (client-side)
   const filteredEvents = events.filter((event) => {
-    // Search filter
-    const query = searchQuery.toLowerCase().trim();
-    if (query) {
-      const matchesFrom = event.from.toLowerCase().includes(query);
-      const matchesTo = event.to.toLowerCase().includes(query);
-      const matchesTick = event.tickNo.replace(/,/g, "").includes(query.replace(/,/g, ""));
-      const matchesAmount = event.amount.toLowerCase().includes(query);
-      const matchesToken = event.token.toLowerCase().includes(query);
-      const isWhaleEvent = detectWhaleInEvent(event);
-      const matchesWhale = query.includes("whale") && isWhaleEvent;
-      if (!matchesFrom && !matchesTo && !matchesTick && !matchesAmount && !matchesToken && !matchesWhale) {
+    // Whale filter (client-side detection)
+    if (typeFilter === 'whale') {
+      if (!detectWhaleInEvent(event)) {
         return false;
       }
     }
 
-    // Token filter
-    if (tokenFilter !== "all-tokens") {
-      if (event.token.toUpperCase() !== tokenFilter.toUpperCase()) {
-        return false;
-      }
-    }
-
-    // Type filter
-    if (typeFilter !== "all-types") {
-      if (typeFilter === "whale") {
-        if (!detectWhaleInEvent(event)) {
-          return false;
-        }
-      } else {
-        const typeMap: Record<string, string> = {
-          bid: "AddToBidOrder",
-          ask: "AddToAskOrder",
-          transfer: "TransferShareOwnershipAndPossession",
-          issue: "IssueAsset",
-          cancelAsk: "RemoveFromAskOrder",
-          cancelBid: "RemoveFromBidOrder",
-        };
-        if (event.type !== typeMap[typeFilter]) {
-          return false;
-        }
-      }
-    }
-
-    // Time filter
+    // Time filter (client-side only)
     if (timeFilter !== "all") {
       const time = event.time.toLowerCase();
       if (timeFilter === "1h") {
@@ -132,17 +116,50 @@ export default function Events() {
         if (time.includes("day") || time.includes("week")) {
           return false;
         }
+      } else if (timeFilter === "7d") {
+        if (time.includes("week") || time.includes("month")) {
+          return false;
+        }
+      } else if (timeFilter === "30d") {
+        if (time.includes("month")) {
+          return false;
+        }
       }
     }
 
     return true;
   });
 
+  // Calculate total pages and display count
+  let displayCount = hasServerFilter ? filteredCount : totalCount;
+  
+  // If whale filter is applied, we filter client-side, so show filtered results
+  if (typeFilter === 'whale') {
+    displayCount = filteredEvents.length;
+  }
+  
+  const totalPages = Math.ceil(displayCount / pageSize);
+
+  const handleEventClick = (event: DisplayEvent) => {
+    setSelectedEvent(event);
+    setDialogOpen(true);
+  };
+
   return (
     <DashboardLayout title="Events">
       <Card className="gradient-card border-border">
         <CardHeader>
-          <CardTitle className="text-xl">QX Events History</CardTitle>
+          <CardTitle className="text-xl">
+            QX Events History
+            <span className="text-sm font-normal text-muted-foreground ml-2">
+              (Total: {countLoading ? '...' : totalCount.toLocaleString()} events)
+            </span>
+            {hasSearchOrFilter && (
+              <span className="text-sm font-normal text-muted-foreground ml-2">
+                • {typeFilter === 'whale' ? filteredEvents.length.toLocaleString() : filteredCount.toLocaleString()} results
+              </span>
+            )}
+          </CardTitle>
           <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3 mt-4">
             <div className="flex-1 min-w-0 sm:min-w-[200px]">
               <div className="relative">
@@ -162,7 +179,7 @@ export default function Events() {
               <SelectContent className="max-h-[300px]">
                 <SelectItem value="all-tokens">All Tokens</SelectItem>
                 {uniqueTokens.map((token) => (
-                  <SelectItem key={token} value={token.toLowerCase()}>
+                  <SelectItem key={token} value={token}>
                     {token}
                   </SelectItem>
                 ))}
@@ -342,6 +359,55 @@ export default function Events() {
                   </div>
                 ))}
               </div>
+
+              {/* Pagination (show always) */}
+              {(events.length > 0 || pageIndex > 0) && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-border">
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setPageIndex(Math.max(0, pageIndex - 1))}
+                      disabled={pageIndex === 0}
+                      className="gap-2"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      Previous
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPageIndex(pageIndex + 1)}
+                      disabled={pageIndex >= totalPages - 1}
+                      className="gap-2"
+                    >
+                      Next
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  
+                  <div className="flex flex-col sm:flex-row items-center gap-4 text-sm text-muted-foreground">
+                    <div className="text-center">
+                      <span className="font-semibold text-foreground">
+                        {(pageIndex * pageSize + 1).toLocaleString()} - {Math.min((pageIndex + 1) * pageSize, displayCount).toLocaleString()}
+                      </span>
+                      <span> of </span>
+                      <span className="font-semibold text-foreground">{displayCount.toLocaleString()}</span>
+                    </div>
+                    <div className="hidden sm:block text-muted-foreground">•</div>
+                    <div className="text-center">
+                      Page <span className="font-semibold text-foreground">{pageIndex + 1}</span>
+                      <span> of </span>
+                      <span className="font-semibold text-foreground">{totalPages}</span>
+                    </div>
+                    <div className="hidden sm:block text-muted-foreground">•</div>
+                    <div className="text-center">
+                      <span className="font-semibold text-foreground">{pageSize}</span>
+                      <span> events per page</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </CardContent>

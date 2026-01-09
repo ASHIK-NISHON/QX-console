@@ -1,19 +1,116 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { QxEventDB, DisplayEvent, transformEvent } from '@/types/qxEvent';
 
-export function useQxEvents(limit: number = 100) {
+// Get total count of all events
+export function useTotalEventsCount() {
+  return useQuery({
+    queryKey: ['qx-events-count'],
+    queryFn: async (): Promise<number> => {
+      const { count, error } = await supabase
+        .from('qx_events')
+        .select('*', { count: 'exact', head: true });
+
+      if (error) {
+        console.error('Error fetching events count:', error);
+        return 0;
+      }
+
+      return count || 0;
+    },
+    refetchInterval: 60000,
+  });
+}
+
+// Get count for filtered results
+export function useFilteredEventsCount(
+  searchQuery: string = '',
+  tokenFilter: string = 'all-tokens',
+  typeFilter: string = 'all-types'
+) {
+  return useQuery({
+    queryKey: ['filtered-events-count', searchQuery, tokenFilter, typeFilter],
+    queryFn: async (): Promise<number> => {
+      if (!searchQuery.trim() && tokenFilter === 'all-tokens' && typeFilter === 'all-types') {
+        return 0;
+      }
+
+      let query = supabase
+        .from('qx_events')
+        .select('*', { count: 'exact', head: true });
+
+      // Apply search filter - search across multiple fields
+      if (searchQuery.trim()) {
+        const q = searchQuery.trim();
+        // Try to parse as number for tick_number search
+        const asNumber = parseInt(q);
+        
+        if (!isNaN(asNumber)) {
+          // Search in tick_number, source_id, dest_id
+          query = query.or(
+            `tick_number.eq.${asNumber},source_id.ilike.%${q}%,dest_id.ilike.%${q}%`
+          );
+        } else {
+          // Search in source_id, dest_id only (for addresses)
+          query = query.or(
+            `source_id.ilike.%${q}%,dest_id.ilike.%${q}%`
+          );
+        }
+      }
+
+      // Apply token filter - handle case-insensitive matching
+      if (tokenFilter !== 'all-tokens') {
+        const upperToken = tokenFilter.toUpperCase();
+        // Check both asset_name (exact match) and NULL (for QUBIC)
+        if (upperToken === 'QUBIC') {
+          query = query.or(`asset_name.is.null,asset_name.ilike.QUBIC`);
+        } else {
+          query = query.ilike('asset_name', upperToken);
+        }
+      }
+
+      // Apply type filter
+      if (typeFilter !== 'all-types' && typeFilter !== 'whale') {
+        const typeMap: Record<string, string> = {
+          bid: 'AddToBidOrder',
+          ask: 'AddToAskOrder',
+          transfer: 'TransferShareOwnershipAndPossession',
+          issue: 'IssueAsset',
+          cancelAsk: 'RemoveFromAskOrder',
+          cancelBid: 'RemoveFromBidOrder',
+        };
+        query = query.eq('procedure_type_name', typeMap[typeFilter] || typeFilter);
+      }
+
+      const { count, error } = await query;
+
+      if (error) {
+        console.error('Error fetching filtered count:', error);
+        return 0;
+      }
+
+      return count || 0;
+    },
+    enabled: !!(searchQuery.trim() || tokenFilter !== 'all-tokens' || typeFilter !== 'all-types'),
+  });
+}
+
+export function useQxEvents(pageSize: number = 50) {
   const queryClient = useQueryClient();
+  const [pageIndex, setPageIndex] = useState(0);
 
   const query = useQuery({
-    queryKey: ['qx-events', limit],
+    queryKey: ['qx-events', pageIndex, pageSize],
     queryFn: async (): Promise<DisplayEvent[]> => {
+      const from = pageIndex * pageSize;
+      const to = from + pageSize - 1;
+
       const { data, error } = await supabase
         .from('qx_events')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(limit);
+        .range(from, to);
 
       if (error) {
         console.error('Error fetching events:', error);
@@ -22,10 +119,9 @@ export function useQxEvents(limit: number = 100) {
 
       return (data as QxEventDB[]).map(transformEvent);
     },
-    refetchInterval: 30000, // Refetch every 30 seconds as backup
+    refetchInterval: 30000,
   });
 
-  // Set up real-time subscription
   useEffect(() => {
     const channel = supabase
       .channel('qx-events-realtime')
@@ -38,12 +134,8 @@ export function useQxEvents(limit: number = 100) {
         },
         (payload) => {
           console.log('New event received:', payload);
-          // Add new event to the top of the list
-          queryClient.setQueryData(['qx-events', limit], (oldData: DisplayEvent[] | undefined) => {
-            if (!oldData) return [transformEvent(payload.new as QxEventDB)];
-            const newEvent = transformEvent(payload.new as QxEventDB);
-            return [newEvent, ...oldData.slice(0, limit - 1)];
-          });
+          queryClient.invalidateQueries({ queryKey: ['qx-events'] });
+          queryClient.invalidateQueries({ queryKey: ['qx-events-count'] });
         }
       )
       .subscribe();
@@ -51,9 +143,92 @@ export function useQxEvents(limit: number = 100) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [queryClient, limit]);
+  }, [queryClient]);
 
-  return query;
+  return {
+    ...query,
+    pageIndex,
+    setPageIndex,
+    pageSize,
+  };
+}
+
+// Search with pagination
+export function useSearchQxEvents(
+  searchQuery: string = '',
+  tokenFilter: string = 'all-tokens',
+  typeFilter: string = 'all-types',
+  pageIndex: number = 0,
+  pageSize: number = 50
+) {
+  return useQuery({
+    queryKey: ['search-qx-events', searchQuery, tokenFilter, typeFilter, pageIndex, pageSize],
+    queryFn: async (): Promise<DisplayEvent[]> => {
+      const from = pageIndex * pageSize;
+      const to = from + pageSize - 1;
+
+      let query = supabase
+        .from('qx_events')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      // Apply search filter - search in tick_number, addresses
+      if (searchQuery.trim()) {
+        const q = searchQuery.trim();
+        // Try to parse as number for tick_number search
+        const asNumber = parseInt(q);
+        
+        if (!isNaN(asNumber)) {
+          // Search in tick_number, source_id, dest_id
+          query = query.or(
+            `tick_number.eq.${asNumber},source_id.ilike.%${q}%,dest_id.ilike.%${q}%`
+          );
+        } else {
+          // Search in source_id, dest_id only (for addresses)
+          query = query.or(
+            `source_id.ilike.%${q}%,dest_id.ilike.%${q}%`
+          );
+        }
+      }
+
+      // Apply token filter - handle case-insensitive matching
+      if (tokenFilter !== 'all-tokens') {
+        const upperToken = tokenFilter.toUpperCase();
+        // Check both asset_name (exact match) and NULL (for QUBIC)
+        if (upperToken === 'QUBIC') {
+          query = query.or(`asset_name.is.null,asset_name.ilike.QUBIC`);
+        } else {
+          query = query.ilike('asset_name', upperToken);
+        }
+      }
+
+      // Apply type filter
+      if (typeFilter !== 'all-types' && typeFilter !== 'whale') {
+        const typeMap: Record<string, string> = {
+          bid: 'AddToBidOrder',
+          ask: 'AddToAskOrder',
+          transfer: 'TransferShareOwnershipAndPossession',
+          issue: 'IssueAsset',
+          cancelAsk: 'RemoveFromAskOrder',
+          cancelBid: 'RemoveFromBidOrder',
+        };
+        query = query.eq('procedure_type_name', typeMap[typeFilter] || typeFilter);
+      }
+
+      // Apply pagination
+      query = query.range(from, to);
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Error searching events:', error);
+        throw error;
+      }
+
+      return (data as QxEventDB[]).map(transformEvent);
+    },
+    enabled: !!(searchQuery.trim() || tokenFilter !== 'all-tokens' || typeFilter !== 'all-types'),
+  });
 }
 
 export function useEventsByWallet(walletAddress: string | null) {
