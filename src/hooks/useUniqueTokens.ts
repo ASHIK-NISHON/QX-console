@@ -5,7 +5,7 @@ import { useQxEvents } from "@/hooks/useQxEvents";
 const BASE_TOKENS = ["QUBIC", "QMINE", "GARTH", "MATILDA", "CFB", "QXMR"];
 
 export function useUniqueTokens() {
-  const { data: events = [] } = useQxEvents(500);
+  const { data: events = [] } = useQxEvents(0, 500);
 
   const uniqueTokens = useMemo(() => {
     const tokenSet = new Set<string>(BASE_TOKENS);

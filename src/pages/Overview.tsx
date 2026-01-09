@@ -71,7 +71,7 @@ export default function Overview() {
   const uniqueTokens = useUniqueTokens();
 
   // Fetch more events so the all-time chart aligns with KPI totals
-  const { data: events = [], isLoading: eventsLoading } = useQxEvents(1000);
+  const { data: events = [], isLoading: eventsLoading } = useQxEvents(0, 1000);
   const { data: kpiStats } = useKPIStats();
 
   // Detect whale events

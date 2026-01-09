@@ -96,9 +96,8 @@ export function useFilteredEventsCount(
   });
 }
 
-export function useQxEvents(pageSize: number = 50) {
+export function useQxEvents(pageIndex: number = 0, pageSize: number = 50) {
   const queryClient = useQueryClient();
-  const [pageIndex, setPageIndex] = useState(0);
 
   const query = useQuery({
     queryKey: ['qx-events', pageIndex, pageSize],
@@ -145,12 +144,7 @@ export function useQxEvents(pageSize: number = 50) {
     };
   }, [queryClient]);
 
-  return {
-    ...query,
-    pageIndex,
-    setPageIndex,
-    pageSize,
-  };
+  return query;
 }
 
 // Search with pagination

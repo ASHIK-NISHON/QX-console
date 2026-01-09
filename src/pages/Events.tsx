@@ -85,7 +85,7 @@ export default function Events() {
   const { data: filteredCount = 0 } = useFilteredEventsCount(searchQuery, tokenFilter, typeFilter !== 'whale' ? typeFilter : 'all-types');
 
   // Get events - use search hook only for server-side filters, whale is client-side
-  const paginationResults = useQxEvents(pageSize);
+  const paginationResults = useQxEvents(pageIndex, pageSize);
   const searchResults = useSearchQxEvents(searchQuery, tokenFilter, typeFilter !== 'whale' ? typeFilter : 'all-types', pageIndex, pageSize);
 
   // Choose which data to use
